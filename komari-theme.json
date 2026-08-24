@@ -1,0 +1,466 @@
+{
+  "name": "Komari Zen",
+  "short": "Zen",
+  "description": "基于极简主义设计理念的 Komari 主题。",
+  "version": "1.0.0",
+  "author": "qwer-xyz",
+  "url": "https://github.com/qwer-xyz/komari-theme-zen",
+  "preview": "preview.png",
+  "configuration": {
+    "type": "managed",
+    "name": {
+      "en": "Zen Theme Settings",
+      "zh-CN": "Zen 主题设置"
+    },
+    "data": [
+      {
+        "name": {
+          "en": "General",
+          "zh-CN": "通用"
+        },
+        "type": "title"
+      },
+      {
+        "key": "showLogo",
+        "type": "switch",
+        "name": {
+          "en": "Show logo",
+          "zh-CN": "显示 Logo"
+        },
+        "default": false,
+        "help": {
+          "en": "Show logo beside title.",
+          "zh-CN": "在标题旁显示 Logo。"
+        }
+      },
+      {
+        "key": "customLogoUrl",
+        "type": "string",
+        "name": {
+          "en": "Custom logo URL",
+          "zh-CN": "Logo 图片地址"
+        },
+        "default": "",
+        "help": {
+          "en": "Empty uses /favicon.ico.",
+          "zh-CN": "留空使用 /favicon.ico。"
+        }
+      },
+      {
+        "key": "logoShape",
+        "type": "select",
+        "name": {
+          "en": "Logo shape",
+          "zh-CN": "Logo 形状"
+        },
+        "options": "圆形,圆角,方形",
+        "default": "圆角",
+        "help": {
+          "en": "Logo crop shape.",
+          "zh-CN": "Logo 裁切形状。"
+        }
+      },
+      {
+        "key": "offlineServerPosition",
+        "type": "select",
+        "name": {
+          "en": "Offline Server Position",
+          "zh-CN": "离线节点位置"
+        },
+        "options": "首位,保持,末尾",
+        "default": "末尾",
+        "help": {
+          "en": "Position of offline nodes.",
+          "zh-CN": "离线节点显示位置。"
+        }
+      },
+      {
+        "key": "showExpiryTime",
+        "type": "switch",
+        "name": {
+          "en": "Show expiry & billing",
+          "zh-CN": "显示到期时间"
+        },
+        "default": true,
+        "help": {
+          "en": "Show expiry and price.",
+          "zh-CN": "显示到期与价格。"
+        }
+      },
+      {
+        "key": "showAutoRenewal",
+        "type": "switch",
+        "name": {
+          "en": "Show auto renewal",
+          "zh-CN": "显示自动续费"
+        },
+        "default": true,
+        "help": {
+          "en": "Show auto-renewal status.",
+          "zh-CN": "显示节点自动续费状态。"
+        }
+      },
+      {
+        "key": "showResidualValue",
+        "type": "switch",
+        "name": {
+          "en": "Show residual value",
+          "zh-CN": "显示剩余价值"
+        },
+        "default": false,
+        "help": {
+          "en": "Calculate remaining node value.",
+          "zh-CN": "统计节点剩余价值。"
+        }
+      },
+      {
+        "key": "residualValueCurrency",
+        "type": "string",
+        "name": {
+          "en": "Residual value currency",
+          "zh-CN": "剩余价值主货币"
+        },
+        "default": "CNY",
+        "help": {
+          "en": "Enter an ISO 4217 three-letter currency code, such as CNY, USD, or EUR.",
+          "zh-CN": "输入 ISO 4217 三字母货币代码，例如 CNY、USD、EUR。"
+        }
+      },
+      {
+        "key": "defaultViewMode",
+        "type": "select",
+        "name": {
+          "en": "Default view mode",
+          "zh-CN": "默认视图模式"
+        },
+        "options": "卡片,列表",
+        "default": "卡片",
+        "help": {
+          "en": "Default node list layout.",
+          "zh-CN": "节点列表默认布局。"
+        }
+      },
+      {
+        "key": "defaultSortField",
+        "type": "select",
+        "name": {
+          "en": "Default sort field",
+          "zh-CN": "默认排序指标"
+        },
+        "options": "默认,名称,处理器,内存,硬盘,带宽,流量,延迟,到期,状态,系统",
+        "default": "默认",
+        "help": {
+          "en": "Default node sort field.",
+          "zh-CN": "节点列表默认排序项。"
+        }
+      },
+      {
+        "key": "defaultSortOrder",
+        "type": "select",
+        "name": {
+          "en": "Default sort order",
+          "zh-CN": "默认排序方向"
+        },
+        "options": "升序,降序",
+        "default": "升序",
+        "help": {
+          "en": "Sort direction.",
+          "zh-CN": "排序方向。"
+        }
+      },
+      {
+        "key": "showNodeMap",
+        "type": "switch",
+        "name": {
+          "en": "Show node distribution map",
+          "zh-CN": "显示节点分布地图"
+        },
+        "default": true,
+        "help": {
+          "en": "Show the dashboard map.",
+          "zh-CN": "显示首页地图。"
+        }
+      },
+      {
+        "key": "dashboardCpuMetric",
+        "type": "select",
+        "name": {
+          "en": "Dashboard CPU metric",
+          "zh-CN": "首页 CPU 指标"
+        },
+        "options": "平均值,最大值",
+        "default": "平均值",
+        "help": {
+          "en": "Average or max CPU usage.",
+          "zh-CN": "显示平均或最大 CPU 使用率。"
+        }
+      },
+      {
+        "key": "dashboardBandwidthMetric",
+        "type": "select",
+        "name": {
+          "en": "Dashboard bandwidth metric",
+          "zh-CN": "首页带宽指标"
+        },
+        "options": "总值,最大值",
+        "default": "总值",
+        "help": {
+          "en": "Total or max current bandwidth.",
+          "zh-CN": "显示当前总带宽或最大单节点带宽。"
+        }
+      },
+      {
+        "name": {
+          "en": "Latency",
+          "zh-CN": "延迟检测"
+        },
+        "type": "title"
+      },
+      {
+        "key": "showLatency",
+        "type": "switch",
+        "name": {
+          "en": "Show latency on cards",
+          "zh-CN": "显示延迟信息"
+        },
+        "default": true,
+        "help": {
+          "en": "Show latency and history.",
+          "zh-CN": "显示延迟与历史。"
+        }
+      },
+      {
+        "key": "latencyColorMode",
+        "type": "select",
+        "name": {
+          "en": "Latency color mode",
+          "zh-CN": "延迟色块分级模式"
+        },
+        "options": "固定,均值偏移",
+        "default": "固定",
+        "help": {
+          "en": "Fixed threshold or mean delta.",
+          "zh-CN": "固定阈值或均值偏移。"
+        }
+      },
+      {
+        "key": "latencyFixedGreenMax",
+        "type": "number",
+        "name": {
+          "en": "Fixed mode — green below (ms)",
+          "zh-CN": "固定模式 — 绿色上限 (ms)"
+        },
+        "default": 100,
+        "help": {
+          "en": "Green below this value.",
+          "zh-CN": "低于此值为绿色。"
+        }
+      },
+      {
+        "key": "latencyFixedYellowMax",
+        "type": "number",
+        "name": {
+          "en": "Fixed mode — yellow below (ms)",
+          "zh-CN": "固定模式 — 黄色上限 (ms)"
+        },
+        "default": 150,
+        "help": {
+          "en": "Yellow below this value.",
+          "zh-CN": "低于此值为黄色。"
+        }
+      },
+      {
+        "key": "latencyMeanGreenDelta",
+        "type": "number",
+        "name": {
+          "en": "MeanDelta — green delta (ms)",
+          "zh-CN": "均值模式 — 绿色偏移上限 (ms)"
+        },
+        "default": 10,
+        "help": {
+          "en": "Green delta limit.",
+          "zh-CN": "绿色偏移上限。"
+        }
+      },
+      {
+        "key": "latencyMeanYellowDelta",
+        "type": "number",
+        "name": {
+          "en": "MeanDelta — yellow delta (ms)",
+          "zh-CN": "均值模式 — 黄色偏移上限 (ms)"
+        },
+        "default": 30,
+        "help": {
+          "en": "Yellow delta limit.",
+          "zh-CN": "黄色偏移上限。"
+        }
+      },
+      {
+        "name": {
+          "en": "Color scheme",
+          "zh-CN": "配色"
+        },
+        "type": "title"
+      },
+      {
+        "key": "colorPreset",
+        "type": "select",
+        "name": {
+          "en": "Color preset",
+          "zh-CN": "配色方案"
+        },
+        "options": "暖色,红色,黄色,绿色,蓝色,紫色,黑白",
+        "default": "暖色",
+        "help": {
+          "en": "Site-wide color palette.",
+          "zh-CN": "全站配色方案。"
+        }
+      },
+      {
+        "key": "customBgLight",
+        "type": "string",
+        "name": {
+          "en": "Custom page background (light)",
+          "zh-CN": "自定义页面背景（亮色）"
+        },
+        "default": "",
+        "help": {
+          "en": "Light background override.",
+          "zh-CN": "亮色背景覆盖。"
+        }
+      },
+      {
+        "key": "customBgDark",
+        "type": "string",
+        "name": {
+          "en": "Custom page background (dark)",
+          "zh-CN": "自定义页面背景（暗色）"
+        },
+        "default": "",
+        "help": {
+          "en": "Dark background override.",
+          "zh-CN": "暗色背景覆盖。"
+        }
+      },
+      {
+        "key": "customSurfaceLight",
+        "type": "string",
+        "name": {
+          "en": "Custom surface color (light)",
+          "zh-CN": "自定义卡片/弹层背景（亮色）"
+        },
+        "default": "",
+        "help": {
+          "en": "Light surface override.",
+          "zh-CN": "亮色卡片背景。"
+        }
+      },
+      {
+        "key": "customSurfaceDark",
+        "type": "string",
+        "name": {
+          "en": "Custom surface color (dark)",
+          "zh-CN": "自定义卡片/弹层背景（暗色）"
+        },
+        "default": "",
+        "help": {
+          "en": "Dark surface override.",
+          "zh-CN": "暗色卡片背景。"
+        }
+      },
+      {
+        "key": "customAccentLight",
+        "type": "string",
+        "name": {
+          "en": "Custom accent color (light)",
+          "zh-CN": "自定义强调色（亮色）"
+        },
+        "default": "",
+        "help": {
+          "en": "Light accent override.",
+          "zh-CN": "亮色强调色。"
+        }
+      },
+      {
+        "key": "customAccentDark",
+        "type": "string",
+        "name": {
+          "en": "Custom accent color (dark)",
+          "zh-CN": "自定义强调色（暗色）"
+        },
+        "default": "",
+        "help": {
+          "en": "Dark accent override.",
+          "zh-CN": "暗色强调色。"
+        }
+      },
+      {
+        "name": {
+          "en": "Typography",
+          "zh-CN": "字体"
+        },
+        "type": "title"
+      },
+      {
+        "key": "fontPreset",
+        "type": "select",
+        "name": {
+          "en": "Font preset",
+          "zh-CN": "字体方案"
+        },
+        "options": "默认,等宽,游梦,霞鹜文楷,文源圆体,自定义",
+        "default": "默认",
+        "help": {
+          "en": "Site-wide font.",
+          "zh-CN": "全站字体。"
+        }
+      },
+      {
+        "key": "fontFamilyCustom",
+        "type": "string",
+        "name": {
+          "en": "Custom font family",
+          "zh-CN": "自定义字体名称"
+        },
+        "default": "",
+        "help": {
+          "en": "Used by Custom preset.",
+          "zh-CN": "自定义字体名。"
+        }
+      },
+      {
+        "key": "fontCssUrlCustom",
+        "type": "string",
+        "name": {
+          "en": "Custom font CSS URL",
+          "zh-CN": "自定义字体 CSS 地址"
+        },
+        "default": "",
+        "help": {
+          "en": "Font CSS URL.",
+          "zh-CN": "字体 CSS 地址。"
+        }
+      },
+      {
+        "name": {
+          "en": "Footer",
+          "zh-CN": "页脚"
+        },
+        "type": "title"
+      },
+      {
+        "key": "customFooterHtml",
+        "type": "string",
+        "name": {
+          "en": "Custom footer content",
+          "zh-CN": "自定义页脚内容"
+        },
+        "default": "",
+        "help": {
+          "en": "Footer HTML or text.",
+          "zh-CN": "页脚 HTML 或文本。"
+        }
+      }
+    ]
+  }
+}

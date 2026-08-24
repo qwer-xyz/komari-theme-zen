@@ -1,0 +1,711 @@
+@import "tailwindcss";
+
+/* Theme is driven by a `.dark` class on <html> (toggled from React),
+   so dark: variants follow the user's chosen theme, not the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Warm-tinted neutral scale — used only by Radix tag color names (rose, sky, etc.).
+     UI chrome reads semantic --zen-fg-* / --zen-border tokens instead. */
+  --color-neutral-50: #f6f6f4;
+  --color-neutral-100: #efefed;
+  --color-neutral-200: #e2e2df;
+  --color-neutral-300: #c7c6bf;
+  --color-neutral-400: #a5a49c;
+  --color-neutral-500: #7c7b72;
+  --color-neutral-600: #54534d;
+  --color-neutral-700: #3b3a36;
+  --color-neutral-800: #2f2e2b;
+  --color-neutral-900: #252420;
+  --color-neutral-950: #1a1916;
+}
+
+/* Semantic surface tokens — switch with the .dark class. Tune the whole
+   light/dark backdrop here. */
+:root {
+  --zen-bg: #dad8ca;
+  --zen-surface: #e7e5da;
+  --zen-fg: #383733;
+  --zen-fg-strong: #3b3a36;
+  --zen-fg-muted: #54534d;
+  --zen-fg-subtle: #7c7b72;
+  --zen-fg-faint: #a5a49c;
+  --zen-elevate: rgba(255, 255, 255, 0.22);
+  --zen-line: rgba(20, 20, 19, 0.10);
+  --zen-line-strong: rgba(20, 20, 19, 0.20);
+  --zen-border: #e2e2df;
+  --zen-border-muted: #efefed;
+  --zen-fill-muted: #c7c6bf;
+  --zen-accent: #d97706;
+  --zen-accent-muted: #b45309;
+  --zen-success: #16a34a;
+  --zen-warning: #d97706;
+  --zen-danger: #e11d48;
+  --zen-chart-cpu: #f59e0b;
+  --zen-chart-mem: #3b82f6;
+  --zen-chart-swap: #8b5cf6;
+  --zen-chart-load: #f59e0b;
+  --zen-chart-net-in: #14b8a6;
+  --zen-chart-net-out: #f43f5e;
+  --zen-chart-tcp: #f59e0b;
+  --zen-chart-udp: #8b5cf6;
+}
+
+.dark {
+  --zen-bg: #1c1b19;
+  --zen-surface: #252321;
+  --zen-fg: #cac9c2;
+  --zen-fg-strong: #c7c6bf;
+  --zen-fg-muted: #a5a49c;
+  --zen-fg-subtle: #7c7b72;
+  --zen-fg-faint: #54534d;
+  --zen-elevate: rgba(255, 255, 255, 0.025);
+  --zen-line: rgba(255, 255, 255, 0.08);
+  --zen-line-strong: rgba(255, 255, 255, 0.17);
+  --zen-border: #252420;
+  --zen-border-muted: #2f2e2b;
+  --zen-fill-muted: #2f2e2b;
+  --zen-accent: #fbbf24;
+  --zen-accent-muted: #f59e0b;
+  --zen-success: #4ade80;
+  --zen-warning: #fbbf24;
+  --zen-danger: #fb7185;
+  --zen-chart-cpu: #f59e0b;
+  --zen-chart-mem: #3b82f6;
+  --zen-chart-swap: #8b5cf6;
+  --zen-chart-load: #f59e0b;
+  --zen-chart-net-in: #14b8a6;
+  --zen-chart-net-out: #f43f5e;
+  --zen-chart-tcp: #f59e0b;
+  --zen-chart-udp: #8b5cf6;
+}
+
+@theme inline {
+  --color-zen-bg: var(--zen-bg);
+  --color-zen-surface: var(--zen-surface);
+  --color-zen-fg: var(--zen-fg);
+  --color-zen-fg-strong: var(--zen-fg-strong);
+  --color-zen-fg-muted: var(--zen-fg-muted);
+  --color-zen-fg-subtle: var(--zen-fg-subtle);
+  --color-zen-fg-faint: var(--zen-fg-faint);
+  --color-zen-elevate: var(--zen-elevate);
+  --color-zen-line: var(--zen-line);
+  --color-zen-line-strong: var(--zen-line-strong);
+  --color-zen-border: var(--zen-border);
+  --color-zen-border-muted: var(--zen-border-muted);
+  --color-zen-fill-muted: var(--zen-fill-muted);
+  --color-zen-accent: var(--zen-accent);
+  --color-zen-accent-muted: var(--zen-accent-muted);
+  --color-zen-success: var(--zen-success);
+  --color-zen-warning: var(--zen-warning);
+  --color-zen-danger: var(--zen-danger);
+  --color-zen-chart-cpu: var(--zen-chart-cpu);
+  --color-zen-chart-mem: var(--zen-chart-mem);
+  --color-zen-chart-swap: var(--zen-chart-swap);
+  --color-zen-chart-load: var(--zen-chart-load);
+  --color-zen-chart-net-in: var(--zen-chart-net-in);
+  --color-zen-chart-net-out: var(--zen-chart-net-out);
+  --color-zen-chart-tcp: var(--zen-chart-tcp);
+  --color-zen-chart-udp: var(--zen-chart-udp);
+}
+
+html,
+body,
+#root {
+  font-family: var(--font-sans);
+  font-weight: normal;
+}
+
+@layer base {
+  button,
+  input,
+  textarea,
+  select {
+    font-family: inherit;
+  }
+}
+
+body {
+  background-color: var(--zen-bg);
+  color: var(--zen-fg);
+}
+
+.zen-skeleton {
+  position: relative;
+  overflow: hidden;
+}
+
+.zen-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  animation: zen-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes zen-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zen-skeleton::after {
+    animation: none;
+  }
+}
+
+/* ── Motion tokens — springy, subtle UI transitions ── */
+:root {
+  --zen-ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --zen-ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --zen-ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --zen-motion-fast: 180ms;
+  --zen-motion-normal: 320ms;
+  --zen-motion-slow: 480ms;
+}
+
+@keyframes zen-motion-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zen-motion-modal-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes zen-motion-modal-panel-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  52% {
+    opacity: 1;
+    transform: scale(1.025) translateY(-3px);
+  }
+  76% {
+    transform: scale(0.992) translateY(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes zen-motion-modal-panel-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+}
+
+@keyframes zen-motion-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zen-motion-fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zen-motion-fade-in-up-delayed {
+  0%,
+  18% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  48% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.005);
+  }
+  72% {
+    transform: translateY(1px) scale(0.998);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes zen-motion-detail-section-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zen-motion-content-reveal {
+  0% {
+    opacity: 0.55;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zen-motion-page-enter-forward {
+  0% {
+    opacity: 0;
+    transform: translateX(20px) translateY(4px);
+    filter: blur(3px);
+  }
+  55% {
+    opacity: 1;
+    filter: blur(0.5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes zen-motion-page-enter-back {
+  0% {
+    opacity: 0;
+    transform: translateX(-16px) translateY(10px);
+    filter: blur(2.5px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0.5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@layer components {
+  .zen-motion-modal-backdrop-in {
+    animation: zen-motion-modal-backdrop-in 420ms var(--zen-ease-smooth) both;
+  }
+
+  .zen-motion-modal-backdrop-out {
+    animation: zen-motion-modal-backdrop-out 260ms var(--zen-ease-out) both;
+  }
+
+  .zen-motion-modal-panel-in {
+    animation: zen-motion-modal-panel-in 520ms var(--zen-ease-spring) both;
+    transform-origin: center bottom;
+  }
+
+  .zen-motion-modal-panel-out {
+    animation: zen-motion-modal-panel-out 280ms var(--zen-ease-out) both;
+    transform-origin: center bottom;
+  }
+
+  .zen-motion-fade-in {
+    animation: zen-motion-fade-in 220ms var(--zen-ease-smooth) both;
+  }
+
+  .zen-motion-fade-in-up {
+    animation: zen-motion-fade-in-up 420ms var(--zen-ease-spring) both;
+  }
+
+  .zen-motion-fade-in-up-delayed {
+    animation: zen-motion-fade-in-up-delayed 680ms var(--zen-ease-spring) both;
+  }
+
+  .zen-motion-detail-section {
+    animation: zen-motion-detail-section-in 520ms var(--zen-ease-spring) both;
+    animation-delay: var(--zen-stagger-delay, 0ms);
+  }
+
+  .zen-motion-content-reveal {
+    animation: zen-motion-content-reveal 480ms var(--zen-ease-spring) both;
+  }
+
+  .zen-page-transition-root {
+    will-change: opacity, transform, filter;
+  }
+
+  .zen-motion-page-enter-forward {
+    animation: zen-motion-page-enter-forward 560ms var(--zen-ease-spring) both;
+  }
+
+  .zen-motion-page-enter-back {
+    animation: zen-motion-page-enter-back 500ms var(--zen-ease-spring) both;
+  }
+
+  .zen-motion-sliding-indicator {
+    transition:
+      left 380ms var(--zen-ease-spring),
+      width 380ms var(--zen-ease-spring),
+      opacity 220ms var(--zen-ease-smooth);
+  }
+
+  .zen-motion-sliding-pill {
+    transition:
+      left 380ms var(--zen-ease-spring),
+      width 380ms var(--zen-ease-spring),
+      top 380ms var(--zen-ease-spring),
+      height 380ms var(--zen-ease-spring),
+      opacity 220ms var(--zen-ease-smooth);
+  }
+
+  .zen-motion-sort-header {
+    transition:
+      color 280ms var(--zen-ease-smooth),
+      transform 220ms var(--zen-ease-spring);
+  }
+
+  .zen-motion-sort-header:active {
+    transform: scale(0.98);
+  }
+
+  .zen-motion-menu-panel {
+    animation: zen-motion-fade-in-up 320ms var(--zen-ease-spring) both;
+    transform-origin: top right;
+  }
+
+  .zen-motion-pop {
+    transition:
+      transform var(--zen-motion-normal) var(--zen-ease-spring),
+      color 220ms ease,
+      border-color 220ms ease,
+      background-color 220ms ease,
+      box-shadow 220ms ease;
+    transform-origin: center;
+  }
+
+  .zen-motion-pop:hover {
+    transform: scale(1.06);
+  }
+
+  .zen-motion-pop:active {
+    transform: scale(0.92);
+    transition-duration: 120ms;
+  }
+
+  .zen-motion-popover,
+  .zen-motion-tooltip {
+    opacity: 0;
+    transform: scale(0.94) translateY(5px);
+    transition:
+      opacity 220ms var(--zen-ease-smooth),
+      transform 360ms var(--zen-ease-spring);
+    transform-origin: top center;
+    pointer-events: none;
+  }
+
+  .zen-motion-popover-visible,
+  .zen-motion-tooltip-visible {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+
+  .zen-motion-card {
+    transition:
+      transform var(--zen-motion-normal) var(--zen-ease-spring),
+      border-color 260ms ease,
+      box-shadow 260ms ease,
+      opacity 260ms ease,
+      filter 260ms ease;
+  }
+
+  .zen-motion-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .zen-motion-card:active {
+    transform: translateY(0) scale(0.995);
+    transition-duration: 140ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zen-motion-modal-backdrop-in,
+  .zen-motion-modal-backdrop-out,
+  .zen-motion-modal-panel-in,
+  .zen-motion-modal-panel-out,
+  .zen-motion-fade-in,
+  .zen-motion-fade-in-up,
+  .zen-motion-fade-in-up-delayed,
+  .zen-motion-detail-section,
+  .zen-motion-content-reveal,
+  .zen-motion-page-enter-forward,
+  .zen-motion-page-enter-back,
+  .zen-motion-menu-panel {
+    animation: none !important;
+  }
+
+  .zen-motion-sliding-indicator,
+  .zen-motion-sliding-pill {
+    transition: none !important;
+  }
+
+  .zen-motion-sort-header {
+    transition: none !important;
+  }
+
+  .zen-motion-sort-header:active {
+    transform: none;
+  }
+
+  .zen-page-transition-root {
+    will-change: auto;
+  }
+
+  .zen-motion-pop,
+  .zen-motion-popover,
+  .zen-motion-tooltip,
+  .zen-motion-card {
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .zen-motion-popover-visible,
+  .zen-motion-tooltip-visible {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer components {
+  /* Mobile-first: larger on narrow screens, md+ restores desktop density */
+  .zen-type-micro {
+    font-size: 0.6875rem; /* 11px */
+    line-height: 1.25;
+  }
+  @media (min-width: 768px) {
+    .zen-type-micro {
+      font-size: 0.625rem; /* 10px */
+    }
+  }
+
+  .zen-type-caption {
+    font-size: 0.75rem; /* 12px */
+    line-height: 1.35;
+  }
+  @media (min-width: 768px) {
+    .zen-type-caption {
+      font-size: 0.8125rem; /* 13px */
+    }
+  }
+
+  .zen-type-label {
+    font-size: 0.75rem; /* 12px */
+    line-height: 1.35;
+  }
+  @media (min-width: 768px) {
+    .zen-type-label {
+      font-size: 0.75rem; /* 12px */
+    }
+  }
+
+  .zen-type-body {
+    font-size: 0.875rem; /* 14px */
+    line-height: 1.5;
+  }
+  @media (min-width: 768px) {
+    .zen-type-body {
+      font-size: 0.875rem; /* 14px */
+    }
+  }
+
+  .zen-type-data {
+    font-size: 0.8125rem; /* 13px */
+    line-height: 1.4;
+  }
+  @media (min-width: 768px) {
+    .zen-type-data {
+      font-size: 0.8125rem; /* 13px */
+    }
+  }
+
+  .zen-type-section {
+    font-size: 0.8125rem; /* 13px */
+    line-height: 1.35;
+  }
+  @media (min-width: 768px) {
+    .zen-type-section {
+      font-size: 0.8125rem; /* 13px */
+    }
+  }
+
+  .zen-track-tight {
+    letter-spacing: 0.12em;
+  }
+  @media (min-width: 768px) {
+    .zen-track-tight {
+      letter-spacing: 0.18em;
+    }
+  }
+
+  .zen-touch-target {
+    min-height: 2.75rem; /* 44px */
+  }
+
+  .zen-touch-btn {
+    padding-top: 0.625rem;
+    padding-bottom: 0.625rem;
+  }
+  @media (min-width: 768px) {
+    .zen-touch-btn {
+      padding-top: 0.25rem;
+      padding-bottom: 0.25rem;
+    }
+  }
+
+  /* Node distribution map — springy twinkling star markers */
+  .zen-map-star-halo {
+    transform-box: fill-box;
+    transform-origin: center;
+    opacity: 0.05;
+    transform: scale(0.94);
+    will-change: transform, opacity;
+    animation: zen-map-twinkle-halo 4.2s cubic-bezier(0.45, 0.05, 0.2, 1) infinite both;
+  }
+
+  .zen-map-star-glow {
+    transform-box: fill-box;
+    transform-origin: center;
+    opacity: 0.1;
+    transform: scale(0.95);
+    will-change: transform, opacity;
+    animation: zen-map-twinkle-glow 3.1s cubic-bezier(0.34, 1.25, 0.64, 1) infinite both;
+  }
+
+  .zen-map-star-core {
+    transform-box: fill-box;
+    transform-origin: center;
+    opacity: 0.84;
+    transform: scale(1);
+    will-change: transform, opacity;
+    animation: zen-map-twinkle-core 2.5s cubic-bezier(0.34, 1.35, 0.64, 1) infinite both;
+  }
+}
+
+@keyframes zen-map-twinkle-halo {
+  0%,
+  100% {
+    opacity: 0.05;
+    transform: scale(0.94);
+  }
+  32% {
+    opacity: 0.14;
+    transform: scale(1.06);
+  }
+  48% {
+    opacity: 0.21;
+    transform: scale(1.12);
+  }
+  62% {
+    opacity: 0.15;
+    transform: scale(1.04);
+  }
+  78% {
+    opacity: 0.18;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes zen-map-twinkle-glow {
+  0%,
+  100% {
+    opacity: 0.1;
+    transform: scale(0.95);
+  }
+  26% {
+    opacity: 0.22;
+    transform: scale(1.04);
+  }
+  42% {
+    opacity: 0.34;
+    transform: scale(1.1);
+  }
+  56% {
+    opacity: 0.26;
+    transform: scale(1.02);
+  }
+  70% {
+    opacity: 0.3;
+    transform: scale(1.07);
+  }
+  86% {
+    opacity: 0.16;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes zen-map-twinkle-core {
+  0%,
+  100% {
+    opacity: 0.84;
+    transform: scale(1);
+  }
+  30% {
+    opacity: 0.94;
+    transform: scale(1.05);
+  }
+  44% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  58% {
+    opacity: 0.92;
+    transform: scale(1.02);
+  }
+  72% {
+    opacity: 0.98;
+    transform: scale(1.06);
+  }
+  88% {
+    opacity: 0.88;
+    transform: scale(0.99);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zen-map-star-halo,
+  .zen-map-star-glow,
+  .zen-map-star-core {
+    animation: none;
+  }
+}
