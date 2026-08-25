@@ -226,13 +226,24 @@ and state clearly that live visual verification was not performed.
 
 ## Commits and PRs
 
-Write commit messages in the imperative mood and focus on user-visible impact.
+Use Conventional Commits for commit titles. Keep the lowercase type prefix in
+English and write the summary and optional body in Chinese:
 
-- Good: `Improve mobile node card spacing`
-- Good: `Fix latency chart empty state`
-- Good: `Add Zen theme color preset controls`
-- Bad: `Update files`
-- Bad: `Refactor components`
+```text
+<type>(optional-scope): <中文摘要>
+```
+
+Use `feat` for user-visible features, `fix` for bug fixes, and the closest
+standard type such as `refactor`, `style`, `docs`, `test`, `build`, `ci`, or
+`chore` for other changes. Write the Chinese summary in the imperative mood and
+focus on user-visible impact. When a body is useful, write it in Chinese and
+use concise bullet points that describe the actual changes.
+
+- Good: `feat: 优化移动端节点卡片间距`
+- Good: `fix: 修复延迟图表空状态显示`
+- Good: `feat(settings): 添加 Zen 主题配色预设`
+- Bad: `update: 更新文件`
+- Bad: `refactor: 修改组件`
 
 Do not add `Co-authored-by` lines for agents.
 

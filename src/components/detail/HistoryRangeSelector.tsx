@@ -59,7 +59,7 @@ export function HistoryRangeSelector({
   const activeId = isLive ? "live" : String(value);
 
   return (
-    <div className="max-w-full overflow-x-auto">
+    <div className="max-w-full overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <ZenTabControl
         tabs={tabs}
         value={activeId}
@@ -69,7 +69,7 @@ export function HistoryRangeSelector({
         }}
         tabClassName={`px-1.5 ${zenTouch.btn} uppercase tracking-widest font-black whitespace-nowrap font-mono ${zenType.caption}`}
         idleClassName={zenInteractive.rangeIdle}
-        className="gap-3 sm:gap-6 shrink-0 select-none"
+        className="w-max gap-3 pr-1 sm:gap-6 shrink-0 select-none"
       />
     </div>
   );

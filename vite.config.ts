@@ -98,18 +98,24 @@ export default defineConfig(({ mode }) => {
       );
     }
 
+    const apiOrigin = apiTarget
+      ? new URL(apiTarget).origin
+      : "http://127.0.0.1:25774";
+
     config.server = {
       ...config.server,
       proxy: {
         "/api": {
           target: apiTarget || "http://127.0.0.1:25774",
           changeOrigin: true,
+          headers: { origin: apiOrigin },
           rewriteWsOrigin: true,
           ws: true,
         },
         "/themes": {
           target: apiTarget || "http://127.0.0.1:25774",
           changeOrigin: true,
+          headers: { origin: apiOrigin },
         },
       },
     };
