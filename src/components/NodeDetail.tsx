@@ -5,7 +5,7 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { Activity, ArrowLeft, Cpu, Gauge, RadioTower } from "lucide-react";
 import { VPSNode } from "../types";
 import { translations, Lang, type Messages } from "../lib/i18n";
 import type { LiveRecord } from "@/types/LiveData";
@@ -102,6 +102,22 @@ function DetailSection({
     <div
       className={`${zenMotion.detailSection} ${className}`.trim()}
       style={{ "--zen-stagger-delay": `${delay}ms` } as React.CSSProperties}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DetailPanel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border border-zen-line bg-zen-surface/70 p-5 shadow-[0_10px_30px_rgba(38,35,28,0.045)] transition-colors dark:shadow-[0_12px_32px_rgba(0,0,0,0.16)] sm:p-6 ${className}`}
     >
       {children}
     </div>
@@ -436,9 +452,13 @@ const MiniLineChart = ({
               {hoverLabel}
             </span>
           )}
-          <span style={{ color }}>● {formatDisplay(displayVal1)}</span>
-          {displayVal2 !== null && (
-            <span style={{ color: color2 }}>● {formatDisplay(displayVal2)}</span>
+          {!isHovering && (
+            <>
+              <span style={{ color }}>● {formatDisplay(displayVal1)}</span>
+              {displayVal2 !== null && (
+                <span style={{ color: color2 }}>● {formatDisplay(displayVal2)}</span>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -787,9 +807,6 @@ export function NodeDetail({
   const handleActiveRangeChange =
     subSection === "metrics" ? handleLoadRangeChange : handlePingRangeChange;
 
-  const monitoringSectionIndex =
-    t.sectionResourceMonitoring.match(/^\[[^\]]+\]/)?.[0] ?? "[03]";
-
   // Helper to format speeds (node fields are KB/s)
   const formatSpeed = (kbps: number) => formatKbps(kbps);
 
@@ -828,10 +845,17 @@ export function NodeDetail({
   const textBody = zenText.primary;
   const textSecondary = zenText.secondary;
 
-  const SectionHeading = ({ children }: { children: React.ReactNode }) => (
-    <div className="flex items-center gap-3">
+  const SectionHeading = ({
+    children,
+    icon: Icon,
+  }: {
+    children: React.ReactNode;
+    icon?: React.ComponentType<{ className?: string }>;
+  }) => (
+    <div className="flex items-center gap-2.5">
+      {Icon ? <Icon className="h-4 w-4 shrink-0 text-zen-fg-muted" aria-hidden="true" /> : null}
       <span
-        className={`shrink-0 font-extrabold ${zenType.body} zen-track-tight uppercase ${textSecondary} font-mono`}
+        className={`shrink-0 font-extrabold ${zenType.body} zen-track-tight ${textSecondary} font-mono`}
       >
         {children}
       </span>
@@ -1060,11 +1084,15 @@ export function NodeDetail({
     return () => ro.disconnect();
   }, [node.name]);
 
+  const statusLabel = node.online
+    ? t.lblStatusOk
+    : t.vpsHostOffline.replace(/^-+\s*|\s*-+$/g, "");
+
   return (
-    <div className={`font-sans ${zenType.body} select-none space-y-6 md:space-y-8 pt-1 pb-4`}>
+    <div className={`font-sans ${zenType.body} select-none space-y-5 md:space-y-6 pt-1 pb-4`}>
       {/* Title block — back inline with node name */}
-      <DetailSection delay={0} className="space-y-2.5 md:space-y-3">
-        <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between md:gap-x-10 lg:gap-x-14">
+      <DetailSection delay={0} className="space-y-3 md:space-y-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-x-10 lg:gap-x-14">
           <div className="min-w-0 flex-1">
             <span
               ref={titleMeasureRef}
@@ -1080,7 +1108,7 @@ export function NodeDetail({
                   type="button"
                   onClick={onBack}
                   aria-label={t.backToList}
-                  className={`group inline-flex shrink-0 items-center gap-1.5 rounded-md border border-zen-line px-2.5 py-1.5 font-mono ${zenType.caption} font-bold tracking-wider uppercase leading-none cursor-pointer transition-all ${
+                  className={`group inline-flex shrink-0 items-center gap-1.5 rounded-full border border-zen-line px-3 py-2 font-mono ${zenType.caption} font-bold tracking-wider leading-none cursor-pointer transition-all ${
                     theme === "dark"
                       ? "bg-zen-surface/50 text-zen-fg-muted hover:border-zen-fg-muted hover:text-zen-fg-strong hover:bg-zen-elevate"
                       : "bg-zen-surface/80 text-zen-fg-subtle hover:border-zen-fg-faint hover:text-zen-fg-strong hover:bg-zen-fill-muted/20"
@@ -1101,8 +1129,28 @@ export function NodeDetail({
               </p>
             ) : null}
           </div>
-          {hasHeaderMeta ? (
-            <div className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1.5 md:justify-end shrink-0 leading-normal">
+          <div className="inline-flex max-w-full shrink-0 items-center gap-3 md:justify-end">
+            <span
+              className={`inline-flex items-center gap-2.5 rounded-full border border-zen-line bg-zen-elevate/45 px-3 py-2 ${zenType.caption} font-bold font-mono whitespace-nowrap shadow-[inset_0_1px_0_var(--zen-elevate)] ${
+                node.online ? "text-zen-accent" : "text-zen-danger"
+              }`}
+            >
+              <span
+                className={`inline-flex h-3 w-3 items-center justify-center rounded-full ${
+                  node.online ? "bg-zen-accent/15" : "bg-zen-danger/15"
+                }`}
+                aria-hidden="true"
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    node.online ? "bg-zen-accent" : "bg-zen-danger"
+                  }`}
+                />
+              </span>
+              {statusLabel}
+            </span>
+            {hasHeaderMeta ? (
+            <div className="hidden max-w-full flex-wrap items-center gap-x-3 gap-y-1.5 md:inline-flex leading-normal">
               {groupName ? (
                 <Link
                   to={groupHref}
@@ -1129,7 +1177,8 @@ export function NodeDetail({
                 />
               ) : null}
             </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </DetailSection>
 
@@ -1177,10 +1226,11 @@ export function NodeDetail({
       {node.online ? (
         <>
           {/* Main 2x2 Mono Section Grid */}
-          <div className="grid grid-cols-1 gap-x-16 gap-y-8 md:grid-cols-2 pt-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 pt-1">
             {/* Column 1: Hardware Specifications */}
-            <DetailSection delay={80} className="space-y-4">
-              <SectionHeading>{t.hardwareSpec}</SectionHeading>
+            <DetailSection delay={80} className="h-full">
+              <DetailPanel className="h-full">
+              <SectionHeading icon={Cpu}>{t.hardwareSpec}</SectionHeading>
               <div className={`grid grid-cols-2 gap-y-3 ${zenType.data} font-mono border-b pb-6 border-transparent`}>
                 <span className={textMuted}>{t.lblCpuVendor}</span>
                 <span className={`font-bold ${textPrimary}`}>{node.cpuVendor}</span>
@@ -1276,11 +1326,13 @@ export function NodeDetail({
                   </>
                 ) : null}
               </div>
+              </DetailPanel>
             </DetailSection>
 
             {/* Column 2: System Loads & Memory */}
-            <DetailSection delay={140} className="space-y-4">
-              <SectionHeading>{t.capacityLoads}</SectionHeading>
+            <DetailSection delay={140} className="h-full">
+              <DetailPanel className="h-full">
+              <SectionHeading icon={Activity}>{t.capacityLoads}</SectionHeading>
               <div className="space-y-6">
                 <div>
                   <div className={`flex justify-between ${zenType.data} ${textSecondary} mb-2 tracking-wider font-mono`}>
@@ -1380,51 +1432,45 @@ export function NodeDetail({
                   </div>
                 </div>
               </div>
+              </DetailPanel>
             </DetailSection>
           </div>
 
           {/* [05] UNIFIED DYNAMIC HARDWARE TIMESERIES & SYSTEM PROCESS TELEMETRY / LATENCY MONITORING */}
           {recordEnabled && (
           <DetailSection delay={200} className="space-y-4 pt-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <span
-                  className={`shrink-0 font-extrabold ${zenType.body} zen-track-tight uppercase ${textSecondary} font-mono`}
-                >
-                  {monitoringSectionIndex}
-                </span>
-                <div className="max-w-full min-w-0 overflow-x-auto">
+            <DetailPanel>
+            <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-h-10 min-w-0 flex-1 items-center">
+                <div className="max-w-full min-w-0 overflow-x-auto rounded-full bg-zen-fill-muted/20 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <ZenTabControl
                     tabs={[
-                      { id: "metrics", label: t.tabMetrics },
-                      { id: "latency", label: t.tabLatency },
+                      {
+                        id: "metrics",
+                        label: t.tabMetrics,
+                        leading: <Gauge className="h-3.5 w-3.5" aria-hidden="true" />,
+                      },
+                      {
+                        id: "latency",
+                        label: t.tabLatency,
+                        leading: <RadioTower className="h-3.5 w-3.5" aria-hidden="true" />,
+                      },
                     ]}
                     value={subSection}
                     onChange={(id) =>
                       setSubSection(id as "metrics" | "latency")
                     }
-                    showIndicator={false}
-                    separator={
-                      <span
-                        className={`${textSecondary} ${zenType.body} font-extrabold select-none`}
-                        aria-hidden
-                      >
-                        {" // "}
-                      </span>
-                    }
-                    tabClassName={`px-0 ${zenTouch.btn} uppercase zen-track-tight whitespace-nowrap font-mono font-extrabold ${zenType.body}`}
-                    activeClassName={textSecondary}
-                    idleClassName={`${zenText.faint} font-semibold`}
+                    variant="pill"
+                    indicatorClassName="zen-glass-segment rounded-full"
+                    tabClassName={`rounded-full px-2.5 py-1.5 ${zenTouch.btn} whitespace-nowrap font-mono font-extrabold ${zenType.caption}`}
+                    activeClassName="text-zen-accent"
+                    idleClassName={`${zenText.subtle} opacity-75 hover:text-zen-fg-strong hover:opacity-100`}
                     className="gap-0 shrink-0 select-none"
                   />
                 </div>
-                <span
-                  className="hidden h-px min-w-8 flex-1 bg-zen-line sm:block"
-                  aria-hidden
-                />
               </div>
 
-              <div className="min-w-0 flex shrink-0 justify-start sm:justify-end sm:self-center">
+              <div className="flex w-full min-w-0 justify-start overflow-hidden sm:w-auto sm:shrink-0 sm:justify-end sm:self-center">
                 <HistoryRangeSelector
                   presets={activePresets}
                   value={activeHours}
@@ -1478,8 +1524,8 @@ export function NodeDetail({
 
               {subSection === "metrics" ? (
                 <>
-                  {/* Sub-grid of 4 charts */}
-                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 ${metricsPanelClass} ${liveMode ? livePanelClass : ""}`}>
+                  {/* One continuous grid keeps card order stable at every breakpoint. */}
+                  <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ${metricsPanelClass} ${liveMode ? livePanelClass : ""} [&>div]:rounded-xl [&>div]:border [&>div]:border-zen-line [&>div]:bg-zen-elevate/35 [&>div]:px-4 [&>div]:py-3.5`}>
                     {/* Chart 1: CPU Utilisation */}
                     <MiniLineChart
                       data={pick(live.cpu, displayedCpuHistory)}
@@ -1589,10 +1635,7 @@ export function NodeDetail({
                         </div>
                       }
                     />
-                  </div>
 
-                  {/* Integrated connection & processes flow metrics */}
-                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 ${metricsPanelClass} ${liveMode ? livePanelClass : ""}`}>
                     {/* Chart 5: Network Connections TCP/UDP */}
                     <MiniLineChart
                       data={pick(live.tcp, displayedTcpHistory)}
@@ -1665,13 +1708,14 @@ export function NodeDetail({
                 </div>
               )}
             </div>
+            </DetailPanel>
           </DetailSection>
           )}
         </>
       ) : (
         <DetailSection delay={80}>
-        <div className="py-20 text-center text-red-500 flex flex-col items-center justify-center space-y-4 font-sans select-none">
-          <span className="text-base font-extrabold tracking-widest text-red-500 uppercase">{t.vpsHostOffline}</span>
+        <div className="py-20 text-center flex flex-col items-center justify-center space-y-4 font-sans select-none">
+          <span className="text-base font-bold tracking-widest text-zen-danger/75 uppercase">{t.vpsHostOffline}</span>
           <p className={`max-w-md ${textSecondary} ${zenType.data} uppercase tracking-wider leading-relaxed`}>
             {t.hostOfflineWarning}
           </p>

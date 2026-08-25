@@ -24,6 +24,7 @@ type ZenTabControlProps = {
   tabClassName?: string;
   activeClassName?: string;
   idleClassName?: string;
+  indicatorClassName?: string;
   separator?: React.ReactNode;
   scrollable?: boolean;
   /** Sliding underline or pill highlight. Off for section-title style tabs. */
@@ -41,6 +42,7 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
       tabClassName = "",
       activeClassName = "text-zen-accent font-black",
       idleClassName = "",
+      indicatorClassName = "",
       separator,
       scrollable = false,
       showIndicator = true,
@@ -55,7 +57,10 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
         aria-hidden
         className={
           variant === "pill"
-            ? `pointer-events-none absolute z-0 rounded-full border border-zen-border-muted bg-zen-surface shadow-sm ${zenMotion.slidingPill}`
+            ? `pointer-events-none absolute z-0 rounded-full ${
+                indicatorClassName ||
+                "border border-zen-border-muted bg-zen-surface shadow-sm"
+              } ${zenMotion.slidingPill}`
             : `pointer-events-none absolute z-0 bottom-0 h-0.5 rounded-full bg-zen-accent ${zenMotion.slidingIndicator}`
         }
         style={
