@@ -6,7 +6,6 @@
 import React, { useLayoutEffect } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { NodeDetail } from "@/components/NodeDetail";
-import { useNodeRecent } from "@/hooks/useNodeRecent";
 import { translations } from "@/lib/i18n";
 import { zenType } from "@/lib/typography";
 import { zenText } from "@/lib/zenSemantics";
@@ -19,10 +18,6 @@ export default function InstancePage() {
   const t = translations[lang];
 
   const node = nodes.find((n) => n.id === uuid);
-  const { records: recentRecords } = useNodeRecent(
-    uuid ?? null,
-    !!node?.online,
-  );
 
   useLayoutEffect(() => {
     window.scrollTo(0, 0);
@@ -31,14 +26,13 @@ export default function InstancePage() {
   const textMutedClass = `${zenText.subtle}/85`;
 
   return (
-    <section>
+    <section className="km-page-instance">
       {node ? (
         <div key={node.id}>
         <NodeDetail
           node={node}
           lang={lang}
           theme={theme}
-          recentRecords={recentRecords}
           onBack={() => navigate("/")}
         />
         </div>

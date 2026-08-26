@@ -2,7 +2,7 @@
   "name": "Komari Zen",
   "short": "Zen",
   "description": "基于极简主义设计理念的 Komari 主题。",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "qwer-xyz",
   "url": "https://github.com/qwer-xyz/komari-theme-zen",
   "preview": "preview.png",
@@ -72,6 +72,19 @@
         "help": {
           "en": "Position of offline nodes.",
           "zh-CN": "离线节点显示位置。"
+        }
+      },
+      {
+        "key": "showOfflineGroup",
+        "type": "switch",
+        "name": {
+          "en": "Show offline group",
+          "zh-CN": "显示离线分组"
+        },
+        "default": false,
+        "help": {
+          "en": "Show an Offline filter when offline nodes exist.",
+          "zh-CN": "存在离线节点时，在首页分组中显示“离线”筛选。"
         }
       },
       {
@@ -238,6 +251,19 @@
         }
       },
       {
+        "key": "dashboardNodeIds",
+        "type": "nodes",
+        "name": {
+          "en": "Homepage statistics nodes",
+          "zh-CN": "首页统计节点"
+        },
+        "default": "[]",
+        "help": {
+          "en": "Choose nodes included in homepage overview statistics. Empty includes all nodes.",
+          "zh-CN": "选择计入首页概览统计的节点，留空表示全部节点。"
+        }
+      },
+      {
         "name": {
           "en": "Latency",
           "zh-CN": "延迟检测"
@@ -255,6 +281,32 @@
         "help": {
           "en": "Show latency and history.",
           "zh-CN": "显示延迟与历史。"
+        }
+      },
+      {
+        "key": "showNetworkQuality",
+        "type": "switch",
+        "name": {
+          "en": "Show homepage network quality",
+          "zh-CN": "显示首页网络质量"
+        },
+        "default": true,
+        "help": {
+          "en": "Show the network quality summary below the homepage overview.",
+          "zh-CN": "在首页核心概览下方显示网络质量摘要。"
+        }
+      },
+      {
+        "key": "pingTaskIds",
+        "type": "pingtasks",
+        "name": {
+          "en": "Displayed Ping tasks",
+          "zh-CN": "显示的 Ping 任务"
+        },
+        "default": "[]",
+        "help": {
+          "en": "Choose Ping tasks used by cards, network quality and node details. Empty includes all tasks.",
+          "zh-CN": "选择卡片、网络质量和节点详情使用的 Ping 任务，留空表示全部任务。"
         }
       },
       {

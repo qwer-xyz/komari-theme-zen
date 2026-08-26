@@ -13,6 +13,7 @@ export default function DashboardPage() {
   const { nodes, lang, theme } = useOutletContext<AppOutletContext>();
 
   return (
+    <section className="km-page-home">
     <NodeTable
       nodes={nodes}
       selectedNodeId={null}
@@ -20,5 +21,6 @@ export default function DashboardPage() {
       lang={lang}
       theme={theme}
     />
+    </section>
   );
 }

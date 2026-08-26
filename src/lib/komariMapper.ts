@@ -54,15 +54,6 @@ function emptyHistory(): NodeHistoryBuffers {
 }
 
 export type HistorySample = {
-  cpu: number;
-  memPercent: number;
-  netIn: number;
-  netOut: number;
-  swapPercent: number;
-  diskPercent: number;
-  tcp: number;
-  udp: number;
-  processes: number;
   latency: number;
   latencyAt: number;
 };
@@ -84,18 +75,9 @@ export function pushHistory(
 ): NodeHistoryBuffers {
   const base = prev ?? emptyHistory();
   if (!online) {
-    const zero = 0;
     const emptyLatency: LatencySample = { ms: 0, t: sample.latencyAt };
     return {
-      cpuHistory: [...base.cpuHistory.slice(1), zero],
-      memHistory: [...base.memHistory.slice(1), zero],
-      netInHistory: [...base.netInHistory.slice(1), zero],
-      netOutHistory: [...base.netOutHistory.slice(1), zero],
-      swapHistory: [...base.swapHistory.slice(1), zero],
-      diskHistory: [...base.diskHistory.slice(1), zero],
-      tcpHistory: [...base.tcpHistory.slice(1), zero],
-      udpHistory: [...base.udpHistory.slice(1), zero],
-      processesHistory: [...base.processesHistory.slice(1), zero],
+      ...base,
       latencyHistory: shiftLatencyHistory(base.latencyHistory, emptyLatency),
     };
   }
@@ -104,15 +86,7 @@ export function pushHistory(
     t: sample.latencyAt,
   };
   return {
-    cpuHistory: [...base.cpuHistory.slice(1), sample.cpu],
-    memHistory: [...base.memHistory.slice(1), sample.memPercent],
-    netInHistory: [...base.netInHistory.slice(1), sample.netIn],
-    netOutHistory: [...base.netOutHistory.slice(1), sample.netOut],
-    swapHistory: [...base.swapHistory.slice(1), sample.swapPercent],
-    diskHistory: [...base.diskHistory.slice(1), sample.diskPercent],
-    tcpHistory: [...base.tcpHistory.slice(1), sample.tcp],
-    udpHistory: [...base.udpHistory.slice(1), sample.udp],
-    processesHistory: [...base.processesHistory.slice(1), sample.processes],
+    ...base,
     latencyHistory: shiftLatencyHistory(base.latencyHistory, latencyPoint),
   };
 }
@@ -187,6 +161,10 @@ export function mapKomariNodeToVps(
     netSpeedIn,
     netSpeedOut,
     latency,
+    pingLoss: 0,
+    pingVolatility: 0,
+    pingTaskCount: 0,
+    pingWorstTask: "",
     price: node.price,
     currency: node.currency,
     billingCycle: node.billing_cycle,

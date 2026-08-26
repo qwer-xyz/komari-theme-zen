@@ -13,6 +13,7 @@ import {
   HardDrive,
   MapPin,
   MemoryStick,
+  RadioTower,
   Server,
   WalletCards,
   Waves,
@@ -37,6 +38,17 @@ export type OverviewStatMetric = {
   icon: LucideIcon;
 };
 
+export type OverviewNetworkHealth = {
+  label: string;
+  status: string;
+  tone: "stable" | "warning" | "danger" | "quiet";
+  metrics: Array<{
+    label: string;
+    value: string;
+    detail?: string;
+  }>;
+};
+
 type DashboardOverviewPanelProps = {
   heroes: OverviewHeroMetric[];
   stats: OverviewStatMetric[];
@@ -45,6 +57,7 @@ type DashboardOverviewPanelProps = {
   showNodeMap: boolean;
   nodeMapLabel: string;
   onOpenNodeMap: () => void;
+  networkHealth?: OverviewNetworkHealth;
 };
 
 function MetricIcon({ icon: Icon }: { icon: LucideIcon }) {
@@ -192,6 +205,60 @@ function StatMetric({ metric }: { metric: OverviewStatMetric }) {
   );
 }
 
+function NetworkHealthRail({ health }: { health: OverviewNetworkHealth }) {
+  const toneClass = {
+    stable: "text-zen-success",
+    warning: "text-zen-warning",
+    danger: "text-zen-danger",
+    quiet: "text-zen-fg-subtle",
+  }[health.tone];
+
+  return (
+    <div className="bg-zen-elevate/25 px-5 py-4 shadow-[inset_0_10px_24px_-28px_var(--zen-fg)] @xl:px-6 @xl:py-4 @7xl:px-8">
+      <div className="grid min-w-0 grid-cols-3 gap-x-3 gap-y-3 @xl:grid-cols-[minmax(10rem,1.05fr)_repeat(3,minmax(0,1fr))] @xl:items-center @xl:gap-x-8">
+        <div className="col-span-3 flex min-w-0 items-center justify-between gap-3 @xl:col-span-1 @xl:justify-start">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={`inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-zen-fill-muted/25 ${toneClass}`}>
+              <RadioTower className="size-4" strokeWidth={1.8} aria-hidden />
+            </span>
+            <span className={`${zenType.label} ${zenText.muted} truncate font-mono uppercase zen-track-tight`}>
+              {health.label}
+            </span>
+          </div>
+          <span className={`${zenType.caption} ${toneClass} inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap font-mono font-bold`}>
+            <span className="size-1.5 rounded-full bg-current shadow-[0_0_0_3px_color-mix(in_srgb,currentColor_12%,transparent)]" aria-hidden />
+            {health.status}
+          </span>
+        </div>
+        {health.metrics.slice(0, 3).map((metric, index) => (
+          <div
+            key={metric.label}
+            className={`min-w-0 font-mono ${
+              index === 1
+                ? "text-center @xl:text-left"
+                : index === 2
+                  ? "text-right @xl:text-left"
+                  : "text-left"
+            }`}
+          >
+            <span className={`${zenType.micro} ${zenText.subtle} block truncate uppercase`} title={metric.label}>
+              {metric.label}
+            </span>
+            <span className="mt-1 block whitespace-nowrap text-sm font-extrabold leading-none tabular-nums text-zen-fg-strong @xl:text-base">
+              {metric.value}
+            </span>
+            {metric.detail ? (
+              <span className={`${zenType.micro} ${zenText.faint} mt-1.5 hidden truncate normal-case @xl:block`} title={metric.detail}>
+                {metric.detail}
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function DashboardOverviewPanel({
   heroes,
   stats,
@@ -200,6 +267,7 @@ export function DashboardOverviewPanel({
   showNodeMap,
   nodeMapLabel,
   onOpenNodeMap,
+  networkHealth,
 }: DashboardOverviewPanelProps) {
   if (!showHeroes && !showStats) return null;
 
@@ -229,6 +297,7 @@ export function DashboardOverviewPanel({
               </React.Fragment>
             ))}
           </div>
+          {networkHealth ? <NetworkHealthRail health={networkHealth} /> : null}
         </section>
       ) : null}
 

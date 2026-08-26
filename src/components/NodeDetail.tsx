@@ -8,11 +8,12 @@ import { Link } from "react-router-dom";
 import { Activity, ArrowLeft, Cpu, Gauge, RadioTower } from "lucide-react";
 import { VPSNode } from "../types";
 import { translations, Lang, type Messages } from "../lib/i18n";
-import type { LiveRecord } from "@/types/LiveData";
 import { LatencyProbePanel } from "@/components/detail/LatencyProbePanel";
 import { HistoryRangeSelector } from "@/components/detail/HistoryRangeSelector";
 import { useLoadRecords } from "@/hooks/useLoadRecords";
+import { useNodeRecent } from "@/hooks/useNodeRecent";
 import { useRecordSettings } from "@/hooks/useRecordSettings";
+import { useThemeSettings } from "@/hooks/useThemeSettings";
 import {
   buildMetricHistory,
   formatLoadAverage,
@@ -58,7 +59,6 @@ interface NodeDetailProps {
   node: VPSNode;
   lang: Lang;
   theme: "light" | "dark";
-  recentRecords?: LiveRecord[];
   onBack?: () => void;
 }
 
@@ -235,6 +235,7 @@ const MiniLineChart = ({
   timestamps,
   extraSeries,
 }: {
+  key?: React.Key;
   data: (number | null)[];
   data2?: (number | null)[];
   color?: string;
@@ -441,12 +442,12 @@ const MiniLineChart = ({
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      className="group py-2 flex flex-col space-y-3 cursor-crosshair"
+      className="km-load-chart group py-2 flex flex-col space-y-3 cursor-crosshair"
     >
-      <div className="flex items-center gap-3 select-none">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 select-none">
         <span className={`shrink-0 font-extrabold tracking-wider uppercase ${zenType.body} ${zenText.primary} font-mono`}>{title}</span>
-        <span className="h-px flex-1 bg-zen-line" aria-hidden />
-        <div className={`shrink-0 flex items-center justify-end gap-2 sm:gap-3 ${zenType.data} font-mono select-none font-bold`}>
+        <span className="h-px min-w-4 flex-1 bg-zen-line" aria-hidden />
+        <div className={`ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:gap-x-3 ${zenType.data} font-mono select-none font-bold`}>
           {isHovering && (
             <span className={`${zenType.label} text-zen-fg-muted bg-zen-fill-muted/10 px-1.5 py-0.5 rounded tracking-wide font-bold tabular-nums`}>
               {hoverLabel}
@@ -736,11 +737,11 @@ export function NodeDetail({
   node,
   lang,
   theme,
-  recentRecords = [],
   onBack,
 }: NodeDetailProps) {
   const t = translations[lang];
   const { recordEnabled, loadPresets, pingPresets } = useRecordSettings();
+  const { pingTaskIds } = useThemeSettings();
 
   const [selectedLoadHours, setSelectedLoadHours] = React.useState(
     () => loadPresets[0] ?? 1,
@@ -751,6 +752,10 @@ export function NodeDetail({
   const [isPingLoading, setIsPingLoading] = React.useState(false);
   const [subSection, setSubSection] = React.useState<"metrics" | "latency">(
     "metrics",
+  );
+  const { records: recentRecords } = useNodeRecent(
+    node.id,
+    node.online && subSection === "metrics",
   );
   const [liveMode, setLiveMode] = React.useState(true);
   const [selectedProbes, setSelectedProbes] = React.useState<string[]>([]);
@@ -771,10 +776,10 @@ export function NodeDetail({
     }
   }, [pingPresets, selectedPingHours]);
 
-  const loadHours =
-    recordEnabled && node.online && !liveMode ? selectedLoadHours : 0;
+  const loadHours = recordEnabled && node.online ? selectedLoadHours : 0;
   const {
     records: loadRecords,
+    gpuDevices,
     isLoading: isLoadLoading,
   } = useLoadRecords(node.id, loadHours);
 
@@ -888,6 +893,7 @@ export function NodeDetail({
       tcp: buildHistory("tcp"),
       udp: buildHistory("udp"),
       proc: buildHistory("processes"),
+      temp: buildHistory("temp"),
     };
   }, [selectedLoadHours, loadTotals, loadRecords, recentRecords]);
 
@@ -901,6 +907,7 @@ export function NodeDetail({
   const tcpHist = metricHistory.tcp;
   const udpHist = metricHistory.udp;
   const procHist = metricHistory.proc;
+  const tempHist = metricHistory.temp;
 
   const displayedCpuHistory = cpuHist.values;
   const displayedMemHistory = memHist.values;
@@ -911,6 +918,29 @@ export function NodeDetail({
   const displayedTcpHistory = tcpHist.values;
   const displayedUdpHistory = udpHist.values;
   const displayedProcessesHistory = procHist.values;
+  const displayedTemperatureHistory = tempHist.values;
+  const currentTemperature =
+    [...displayedTemperatureHistory].reverse().find(isNum) ?? 0;
+
+  const gpuCharts = React.useMemo(
+    () =>
+      gpuDevices.map((device) => {
+        const records = device.records;
+        const latest = records[records.length - 1];
+        return {
+          ...device,
+          utilization: records.map((record) => record.utilization),
+          memory: records.map((record) =>
+            record.mem_total > 0
+              ? (record.mem_used / record.mem_total) * 100
+              : 0,
+          ),
+          timestamps: records.map((record) => new Date(record.time).getTime()),
+          latest,
+        };
+      }),
+    [gpuDevices],
+  );
 
   const numOnly = (a: (number | null)[]): number[] => a.filter(isNum);
   const netRawMax = Math.max(
@@ -939,10 +969,13 @@ export function NodeDetail({
     [liveSamples],
   );
   const liveHasData = liveSamples.length > 0;
-  const metricsReveal = useContentReveal(isLoadLoading);
+  const metricsReveal = useContentReveal(!liveMode && isLoadLoading);
   const pingReveal = useContentReveal(isPingLoading);
   const liveReveal = useContentReveal(liveMode && !liveHasData);
-  const metricsPanelClass = contentPanelMotion(isLoadLoading, metricsReveal);
+  const metricsPanelClass = contentPanelMotion(
+    !liveMode && isLoadLoading,
+    metricsReveal,
+  );
   const pingPanelClass = contentPanelMotion(isPingLoading, pingReveal);
   const livePanelClass =
     liveMode && !liveHasData
@@ -1084,12 +1117,8 @@ export function NodeDetail({
     return () => ro.disconnect();
   }, [node.name]);
 
-  const statusLabel = node.online
-    ? t.lblStatusOk
-    : t.vpsHostOffline.replace(/^-+\s*|\s*-+$/g, "");
-
   return (
-    <div className={`font-sans ${zenType.body} select-none space-y-5 md:space-y-6 pt-1 pb-4`}>
+    <div className={`km-instance-detail font-sans ${zenType.body} select-none space-y-5 md:space-y-6 pt-1 pb-4`}>
       {/* Title block — back inline with node name */}
       <DetailSection delay={0} className="space-y-3 md:space-y-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-x-10 lg:gap-x-14">
@@ -1129,27 +1158,7 @@ export function NodeDetail({
               </p>
             ) : null}
           </div>
-          <div className="inline-flex max-w-full shrink-0 items-center gap-3 md:justify-end">
-            <span
-              className={`inline-flex items-center gap-2.5 rounded-full border border-zen-line bg-zen-elevate/45 px-3 py-2 ${zenType.caption} font-bold font-mono whitespace-nowrap shadow-[inset_0_1px_0_var(--zen-elevate)] ${
-                node.online ? "text-zen-accent" : "text-zen-danger"
-              }`}
-            >
-              <span
-                className={`inline-flex h-3 w-3 items-center justify-center rounded-full ${
-                  node.online ? "bg-zen-accent/15" : "bg-zen-danger/15"
-                }`}
-                aria-hidden="true"
-              >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    node.online ? "bg-zen-accent" : "bg-zen-danger"
-                  }`}
-                />
-              </span>
-              {statusLabel}
-            </span>
-            {hasHeaderMeta ? (
+          {hasHeaderMeta ? (
             <div className="hidden max-w-full flex-wrap items-center gap-x-3 gap-y-1.5 md:inline-flex leading-normal">
               {groupName ? (
                 <Link
@@ -1177,8 +1186,7 @@ export function NodeDetail({
                 />
               ) : null}
             </div>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </DetailSection>
 
@@ -1692,6 +1700,74 @@ export function NodeDetail({
                         </div>
                       }
                     />
+
+                    {tempHist.hasData && currentTemperature > 0 ? (
+                      <MiniLineChart
+                        data={displayedTemperatureHistory}
+                        color="var(--zen-warning)"
+                        maxVal={Math.max(
+                          100,
+                          ...numOnly(displayedTemperatureHistory),
+                        )}
+                        unitMode="count"
+                        title={t.lblSystemTemperature}
+                        label1={t.lblSystemTemperature}
+                        theme={theme}
+                        timeRange={selectedLoadHours}
+                        messages={t}
+                        hasData
+                        timestamps={histTimestamps}
+                        valueFormatter={(value) => `${value.toFixed(0)} °C`}
+                        subMetrics={
+                          <div className={`flex items-center justify-between ${zenType.caption} font-mono`}>
+                            <span className={textMuted}>{t.lblSystemTemperature}</span>
+                            <span className="font-bold text-zen-warning tabular-nums">
+                              {currentTemperature.toFixed(0)} °C
+                            </span>
+                          </div>
+                        }
+                      />
+                    ) : null}
+
+                    {gpuCharts.map((gpu) => (
+                      <MiniLineChart
+                        key={`${gpu.device_index}:${gpu.device_name}`}
+                        data={gpu.utilization}
+                        data2={gpu.memory}
+                        color="var(--zen-accent)"
+                        color2={ZEN_CHART.mem}
+                        maxVal={100}
+                        unitMode="percent"
+                        title={`${t.lblGpu.replace(/:$/, "")} ${gpu.device_index + 1}`}
+                        label1={t.lblGpuUtilization}
+                        label2={t.lblGpuMemory}
+                        theme={theme}
+                        timeRange={selectedLoadHours}
+                        messages={t}
+                        hasData={gpu.utilization.length > 0}
+                        timestamps={gpu.timestamps}
+                        subMetrics={
+                          <div className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1 ${zenType.caption} font-mono`}>
+                            <span className={`min-w-0 flex-1 truncate ${textMuted}`} title={gpu.device_name}>
+                              {gpu.device_name}
+                            </span>
+                            {gpu.latest ? (
+                              <span className="inline-flex shrink-0 items-center gap-3 tabular-nums">
+                                <span className={textPrimary}>
+                                  {formatStoragePair(
+                                    gpu.latest.mem_used / 1024 ** 3,
+                                    gpu.latest.mem_total / 1024 ** 3,
+                                  )}
+                                </span>
+                                <span className="font-bold text-zen-warning">
+                                  {gpu.latest.temperature} °C
+                                </span>
+                              </span>
+                            ) : null}
+                          </div>
+                        }
+                      />
+                    ))}
                   </div>
                 </>
               ) : (
@@ -1704,6 +1780,7 @@ export function NodeDetail({
                   onToggleProbe={handleToggleProbe}
                   lang={lang}
                   theme={theme}
+                  taskIds={pingTaskIds}
                 />
                 </div>
               )}

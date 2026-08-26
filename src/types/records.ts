@@ -9,13 +9,21 @@ export type PingTaskInfo = {
   id: number;
   name: string;
   interval: number;
+  weight?: number;
+  type?: string;
+  default_on?: boolean;
+  clients?: string[];
   loss: number;
+  total?: number;
+  valid?: number;
+  loss_approximate?: boolean;
   latest?: number;
   avg?: number;
   min?: number;
   max?: number;
   p50?: number;
   p99?: number;
+  stddev?: number;
   p99_p50_ratio?: number;
 };
 
@@ -43,11 +51,32 @@ export type LoadRecord = {
   process: number | null;
   connections: number | null;
   connections_udp: number | null;
+  temp?: number | null;
+  gpu?: number | null;
 };
 
 export type LoadRecordsResponse = {
   count: number;
   records: LoadRecord[];
+  has_gpu_data?: boolean;
+  gpu_devices?: Record<string, GPUDeviceRecords>;
+};
+
+export type GPURecord = {
+  client: string;
+  time: string;
+  device_index: number;
+  device_name: string;
+  mem_total: number;
+  mem_used: number;
+  utilization: number;
+  temperature: number;
+};
+
+export type GPUDeviceRecords = {
+  device_index: number;
+  device_name: string;
+  records: GPURecord[];
 };
 
 export type MetricKey =
@@ -60,4 +89,5 @@ export type MetricKey =
   | "tcp"
   | "udp"
   | "processes"
-  | "load1";
+  | "load1"
+  | "temp";

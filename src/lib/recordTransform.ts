@@ -226,6 +226,8 @@ export function loadMetricValue(
       return rec.process ?? 0;
     case "load1":
       return rec.load ?? 0;
+    case "temp":
+      return rec.temp ?? 0;
   }
 }
 
@@ -385,9 +387,13 @@ export function aggregateLatency(tasks: PingTaskInfo[]): number {
 /** Average latest/avg latency across live ping stats from getNodesLatestStatus. */
 export function aggregateLivePing(
   ping: Record<string, { latest?: number; avg?: number }> | undefined,
+  taskIds: number[] = [],
 ): number {
   if (!ping) return 0;
-  const values = Object.values(ping)
+  const allowedTasks = new Set(taskIds.map(String));
+  const values = Object.entries(ping)
+    .filter(([id]) => allowedTasks.size === 0 || allowedTasks.has(id))
+    .map(([, value]) => value)
     .map((p) => p.latest ?? p.avg)
     .filter((v): v is number => typeof v === "number" && v > 0);
   return averagePositive(values);

@@ -11,6 +11,7 @@ import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const InstancePage = lazy(() => import("@/pages/InstancePage"));
+const PluginPage = lazy(() => import("@/pages/PluginPage"));
 
 export default function App() {
   return (
@@ -29,6 +30,14 @@ export default function App() {
           element={
             <Suspense fallback={<DetailPageSkeleton />}>
               <InstancePage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="plugin/:short/*"
+          element={
+            <Suspense fallback={<DetailPageSkeleton />}>
+              <PluginPage />
             </Suspense>
           }
         />

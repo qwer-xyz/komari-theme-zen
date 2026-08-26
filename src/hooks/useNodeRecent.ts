@@ -23,11 +23,23 @@ export function useNodeRecent(
 
     let stopped = false;
     let timer: number | undefined;
+    let running = false;
+    let controller: AbortController | null = null;
 
-    const fetchRecent = async () => {
-      setIsLoading(true);
+    const scheduleNext = () => {
+      if (stopped || document.hidden) return;
+      timer = window.setTimeout(() => void fetchRecent(false), pollMs);
+    };
+
+    const fetchRecent = async (initial: boolean) => {
+      if (stopped || running || document.hidden) return;
+      running = true;
+      if (initial) setIsLoading(true);
+      controller = new AbortController();
       try {
-        const res = await fetch(`/api/recent/${uuid}`);
+        const res = await fetch(`/api/recent/${encodeURIComponent(uuid)}`, {
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as RecentApiResponse;
         if (!stopped) {
@@ -35,21 +47,32 @@ export function useNodeRecent(
           setError(null);
         }
       } catch (e) {
-        if (!stopped) {
+        if (!stopped && !(e instanceof DOMException && e.name === "AbortError")) {
           setError(e instanceof Error ? e.message : "Failed to fetch recent");
           setRecords([]);
         }
       } finally {
-        if (!stopped) setIsLoading(false);
-        if (!stopped) timer = window.setTimeout(fetchRecent, pollMs);
+        running = false;
+        controller = null;
+        if (!stopped && initial) setIsLoading(false);
+        scheduleNext();
       }
     };
 
-    fetchRecent();
+    const onVisibilityChange = () => {
+      if (stopped || document.hidden || running) return;
+      if (timer) window.clearTimeout(timer);
+      void fetchRecent(false);
+    };
+
+    void fetchRecent(true);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       stopped = true;
+      controller?.abort();
       if (timer) window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [uuid, enabled, pollMs]);
 

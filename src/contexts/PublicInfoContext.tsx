@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { prefetchPublicInfo } from "@/lib/prefetchPublicInfo";
 import { syncThemeAppearanceFromPublicSettings } from "@/lib/themeAppearance";
 
@@ -38,12 +45,17 @@ export const PublicInfoProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = () => {
+  const load = useCallback((force: boolean) => {
     setError(null);
     setIsLoading(true);
 
-    prefetchPublicInfo(true)
+    return prefetchPublicInfo(force)
       .then((data) => {
+        if (!data) {
+          setError("获取公开信息失败");
+          setPublicInfo(null);
+          return;
+        }
         setPublicInfo(data);
         if (data?.theme_settings && typeof data.theme_settings === "object") {
           syncThemeAppearanceFromPublicSettings(data.theme_settings);
@@ -56,16 +68,23 @@ export const PublicInfoProvider: React.FC<{ children: React.ReactNode }> = ({
       .finally(() => {
         setIsLoading(false);
       });
-  };
-
-  useEffect(() => {
-    refresh();
   }, []);
 
+  const refresh = useCallback(() => {
+    void load(true);
+  }, [load]);
+
+  useEffect(() => {
+    void load(false);
+  }, [load]);
+
+  const value = useMemo(
+    () => ({ publicInfo, isLoading, error, refresh }),
+    [publicInfo, isLoading, error, refresh],
+  );
+
   return (
-    <PublicInfoContext.Provider
-      value={{ publicInfo, isLoading, error, refresh }}
-    >
+    <PublicInfoContext.Provider value={value}>
       {children}
     </PublicInfoContext.Provider>
   );

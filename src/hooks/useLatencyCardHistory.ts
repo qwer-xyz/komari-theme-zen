@@ -35,7 +35,9 @@ async function mapWithConcurrency<T, R>(
 async function fetchLatencyHistories(
   call: ReturnType<typeof useRPC2Call>["call"],
   nodeUuids: string[],
+  taskIds: number[],
 ): Promise<Map<string, LatencySample[]>> {
+  const allowedTasks = new Set(taskIds);
   const entries = await mapWithConcurrency<
     string,
     [string, LatencySample[]]
@@ -48,9 +50,16 @@ async function fetchLatencyHistories(
           { uuid: string; type: string; hours: number },
           PingRecordsResponse
         >("common:getRecords", { uuid, type: "ping", hours: HISTORY_HOURS });
+        const tasks = (result?.tasks ?? []).filter(
+          (task) => allowedTasks.size === 0 || allowedTasks.has(task.id),
+        );
+        const records = (result?.records ?? []).filter(
+          (record) =>
+            allowedTasks.size === 0 || allowedTasks.has(record.task_id),
+        );
         const samples = pingRecordsToLatencyHistory(
-          result?.records ?? [],
-          result?.tasks ?? [],
+          records,
+          tasks,
         );
         return [uuid, samples] as [string, LatencySample[]];
       } catch {
@@ -67,7 +76,10 @@ async function fetchLatencyHistories(
 }
 
 /** Preload recent ping history for card latency blocks (API seed + live updates). */
-export function useLatencyCardHistory(nodeUuids: string[]) {
+export function useLatencyCardHistory(
+  nodeUuids: string[],
+  taskIds: number[] = [],
+) {
   const { call } = useRPC2Call();
   const { recordEnabled } = useRecordSettings();
   const [history, setHistory] = useState<Map<string, LatencySample[]>>(
@@ -83,30 +95,33 @@ export function useLatencyCardHistory(nodeUuids: string[]) {
 
     let cancelled = false;
     let timer: number | undefined;
+    let running = false;
 
     const scheduleNext = () => {
-      if (cancelled) return;
+      if (cancelled || document.hidden) return;
       timer = window.setTimeout(() => {
         void refresh(false);
       }, POLL_MS);
     };
 
     const refresh = async (initial: boolean) => {
-      if (cancelled) return;
+      if (cancelled || running || document.hidden) return;
+      running = true;
       if (initial) setIsLoading(true);
 
       try {
-        const map = await fetchLatencyHistories(call, nodeUuids);
+        const map = await fetchLatencyHistories(call, nodeUuids, taskIds);
         if (cancelled) return;
         setHistory(map);
       } finally {
+        running = false;
         if (!cancelled && initial) setIsLoading(false);
         if (!cancelled) scheduleNext();
       }
     };
 
     const onVisibilityChange = () => {
-      if (document.hidden || cancelled) return;
+      if (document.hidden || cancelled || running) return;
       if (timer) window.clearTimeout(timer);
       void refresh(false);
     };
@@ -119,7 +134,7 @@ export function useLatencyCardHistory(nodeUuids: string[]) {
       if (timer) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [nodeUuids.join(","), call, recordEnabled]);
+  }, [nodeUuids.join(","), taskIds.join(","), call, recordEnabled]);
 
   return { history, isLoading };
 }

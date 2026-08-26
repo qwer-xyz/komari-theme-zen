@@ -3,6 +3,7 @@ import { translations } from "./i18n";
 
 /** Sentinel for the "show all groups" filter tab — not a real node group name. */
 export const ALL_NODE_GROUP = "__all__";
+export const OFFLINE_NODE_GROUP = "__offline__";
 
 export function collectNodeGroups(
   nodes: { nodeGroup?: string }[],
