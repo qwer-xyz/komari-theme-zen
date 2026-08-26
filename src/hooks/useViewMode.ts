@@ -35,12 +35,13 @@ export function useViewMode(defaultViewMode: NodeViewMode) {
   const [viewMode, setViewModeState] = useState<NodeViewMode>(() => {
     return readStored() ?? defaultViewMode;
   });
+  const [manualOverride, setManualOverride] = useState(readManualOverride);
   const [isNarrow, setIsNarrow] = useState(isNarrowViewport);
 
   useEffect(() => {
-    if (readStored() !== null) return;
+    if (manualOverride || readStored() !== null) return;
     setViewModeState(defaultViewMode);
-  }, [defaultViewMode]);
+  }, [defaultViewMode, manualOverride]);
 
   useEffect(() => {
     const onResize = () => setIsNarrow(isNarrowViewport());
@@ -49,10 +50,11 @@ export function useViewMode(defaultViewMode: NodeViewMode) {
   }, []);
 
   const effectiveViewMode: NodeViewMode =
-    isNarrow && !readManualOverride() ? "card" : viewMode;
+    isNarrow && !manualOverride ? "card" : viewMode;
 
   const setViewMode = (next: NodeViewMode) => {
     setViewModeState(next);
+    setManualOverride(true);
     try {
       localStorage.setItem(STORAGE_KEY, next);
       localStorage.setItem(MANUAL_KEY, "1");

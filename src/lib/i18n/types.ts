@@ -48,6 +48,10 @@ export type Messages = {
   lblSystemOs: string;
   lblVirtualization: string;
   lblGpu: string;
+  lblGpuUtilization: string;
+  lblGpuMemory: string;
+  lblGpuTemperature: string;
+  lblSystemTemperature: string;
   lblKernel: string;
   agentInfo: string;
   lblKomariVersion: string;
@@ -81,6 +85,7 @@ export type Messages = {
   unitDays: string;
   lblThreads: string;
   lblAllGroups: string;
+  lblOfflineGroup: string;
   selectSortMetric: string;
   sortAsc: string;
   sortDesc: string;
@@ -120,6 +125,15 @@ export type Messages = {
   overviewAllOnline: string;
   overviewOfflineCount: (count: number) => string;
   overviewRecentHourTrend: string;
+  overviewNetworkQuality: string;
+  overviewNetworkStable: string;
+  overviewNetworkAttention: string;
+  overviewNetworkNoData: string;
+  overviewAverageLatency: string;
+  overviewPeakLoss: string;
+  overviewUnstableNodes: string;
+  overviewWorstNode: string;
+  unitNodes: string;
   msgNodeOfflineAwaiting: string;
   pingNoTasks: string;
   pingLatencyDetection: string;

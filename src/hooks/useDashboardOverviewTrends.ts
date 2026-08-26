@@ -18,11 +18,17 @@ import type {
 } from "@/hooks/useThemeSettings";
 import type { LiveRecord } from "@/types/LiveData";
 import type { LoadRecord } from "@/types/records";
+import type { QueryMetricsResponse } from "@/types/metrics";
 import type { VPSNode } from "@/types";
+import {
+  canTryRpcMethod,
+  noteRpcMethodFailure,
+} from "@/lib/rpcCapability";
 
 const HISTORY_HOURS = 1;
 const POLL_MS = 60_000;
 const CONCURRENCY = 3;
+const METRIC_METHOD = "public:queryMetrics";
 
 type RecentApiResponse = {
   data?: LiveRecord[];
@@ -110,6 +116,71 @@ async function fetchNodeTrend(
   return [uuid, await fetchRecent(uuid)];
 }
 
+async function fetchMetricTrends(
+  call: ReturnType<typeof useRPC2Call>["call"],
+  entityIds: string[],
+): Promise<Map<string, DashboardTrendSample[]> | null> {
+  if (!canTryRpcMethod(METRIC_METHOD)) return null;
+
+  try {
+    const entityIdSet = new Set(entityIds);
+    const response = await call<unknown, QueryMetricsResponse>(METRIC_METHOD, {
+      metric_keys: ["cpu.usage", "net.in.rate", "net.out.rate"],
+      entity_ids: entityIds,
+      hours: HISTORY_HOURS,
+      aggregation: "avg",
+      fill_empty: true,
+      max_points: 36,
+    });
+    if (!Array.isArray(response?.series)) return null;
+
+    const buckets = new Map<
+      string,
+      Map<number, { cpu?: number | null; netIn?: number | null; netOut?: number | null }>
+    >();
+    for (const series of response.series) {
+      if (!entityIdSet.has(series.entity_id)) continue;
+      const entity = buckets.get(series.entity_id) ?? new Map();
+      for (const point of series.points ?? []) {
+        const timestamp = new Date(point.time).getTime();
+        if (!Number.isFinite(timestamp)) continue;
+        const bucket = entity.get(timestamp) ?? {};
+        if (series.metric_key === "cpu.usage") bucket.cpu = point.value;
+        if (series.metric_key === "net.in.rate") bucket.netIn = point.value;
+        if (series.metric_key === "net.out.rate") bucket.netOut = point.value;
+        entity.set(timestamp, bucket);
+      }
+      buckets.set(series.entity_id, entity);
+    }
+
+    const histories = new Map<string, DashboardTrendSample[]>();
+    for (const entityId of entityIds) {
+      const entity = buckets.get(entityId);
+      const samples = entity
+        ? [...entity.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([t, values]) => ({
+              t,
+              cpu:
+                values.cpu != null && Number.isFinite(values.cpu)
+                  ? Math.max(0, values.cpu)
+                  : null,
+              bandwidth:
+                values.netIn != null || values.netOut != null
+                  ? Math.max(0, values.netIn ?? 0) +
+                    Math.max(0, values.netOut ?? 0)
+                  : null,
+            }))
+        : [];
+      histories.set(entityId, samples);
+    }
+    return histories;
+  } catch (error) {
+    noteRpcMethodFailure(METRIC_METHOD, error);
+    return null;
+  }
+}
+
 export function useDashboardOverviewTrends(
   nodes: VPSNode[],
   enabled: boolean,
@@ -145,12 +216,19 @@ export function useDashboardOverviewTrends(
       if (cancelled || running || document.hidden) return;
       running = true;
       try {
-        const entries = await mapWithConcurrency(
-          onlineNodeIds,
-          CONCURRENCY,
-          (uuid) => fetchNodeTrend(call, uuid, recordEnabled),
-        );
-        if (!cancelled) setHistories(new Map(entries));
+        const metricHistories = recordEnabled
+          ? await fetchMetricTrends(call, onlineNodeIds)
+          : null;
+        if (metricHistories) {
+          if (!cancelled) setHistories(metricHistories);
+        } else {
+          const entries = await mapWithConcurrency(
+            onlineNodeIds,
+            CONCURRENCY,
+            (uuid) => fetchNodeTrend(call, uuid, recordEnabled),
+          );
+          if (!cancelled) setHistories(new Map(entries));
+        }
       } finally {
         running = false;
         scheduleNext();

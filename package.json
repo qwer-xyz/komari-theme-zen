@@ -1,15 +1,15 @@
 {
-  "name": "komari-zen",
+  "name": "komari-theme-zen",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "node scripts/generate-world-map.mjs && vite build",
     "generate:map": "node scripts/generate-world-map.mjs",
-    "pack": "npm run build && rm -f zen-theme-v*.zip && zip -r zen-theme-v$(node -p \"require('./package.json').version\").zip komari-theme.json preview.png dist/",
+    "pack": "npm run build && node scripts/pack-theme.mjs",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "node scripts/clean.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "archiver": "^8.0.0",
     "d3-geo": "^3.1.1",
     "iso-3166-1": "^2.1.1",
     "tailwindcss": "^4.1.14",

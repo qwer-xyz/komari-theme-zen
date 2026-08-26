@@ -21,6 +21,7 @@ import {
 } from "@/lib/billingDisplay";
 import {
   ALL_NODE_GROUP,
+  OFFLINE_NODE_GROUP,
   allGroupsLabel,
   collectNodeGroups,
 } from "@/lib/nodeGroups";
@@ -33,6 +34,7 @@ import {
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import { useViewMode } from "@/hooks/useViewMode";
 import { useRecordSettings } from "@/hooks/useRecordSettings";
+import { useCollectionTransition } from "@/hooks/useCollectionTransition";
 import { Flag } from "@/components/Flag";
 import { OsIcon } from "@/components/OsIcon";
 import { NodeTags } from "@/components/NodeTags";
@@ -143,6 +145,7 @@ export function NodeTable({
   const {
     showExpiryTime,
     showAutoRenewal,
+    showOfflineGroup,
     defaultViewMode,
     defaultSortField,
     defaultSortOrder,
@@ -455,8 +458,13 @@ export function NodeTable({
   const nodeGroups = useMemo(() => {
     return collectNodeGroups(nodes);
   }, [nodes]);
+  const hasOfflineNodes = useMemo(
+    () => nodes.some((node) => !node.online),
+    [nodes],
+  );
+  const showOfflineTab = showOfflineGroup && hasOfflineNodes;
 
-  const showGroupTabs = nodeGroups.length >= 1;
+  const showGroupTabs = nodeGroups.length >= 1 || showOfflineTab;
 
   useEffect(() => {
     const nextGroup = routeGroup || ALL_NODE_GROUP;
@@ -466,12 +474,13 @@ export function NodeTable({
   useEffect(() => {
     if (
       activeGroup !== ALL_NODE_GROUP &&
-      !nodeGroups.includes(activeGroup)
+      !nodeGroups.includes(activeGroup) &&
+      !(activeGroup === OFFLINE_NODE_GROUP && showOfflineTab)
     ) {
       setActiveGroup(ALL_NODE_GROUP);
       updateGroupSearchParam(ALL_NODE_GROUP, true);
     }
-  }, [activeGroup, nodeGroups, updateGroupSearchParam]);
+  }, [activeGroup, nodeGroups, showOfflineTab, updateGroupSearchParam]);
 
   useEffect(() => {
     const scroller = groupScrollRef.current;
@@ -484,14 +493,14 @@ export function NodeTable({
       scroller.removeEventListener("scroll", refreshGroupScrollFade);
       ro.disconnect();
     };
-  }, [nodeGroups.length, refreshGroupScrollFade]);
+  }, [nodeGroups.length, refreshGroupScrollFade, showOfflineTab]);
 
   useEffect(() => {
     const scroller = groupScrollRef.current;
     if (!scroller) return;
     const activeChip = scroller.querySelector<HTMLElement>("[data-group-active='true']");
     activeChip?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
-  }, [activeGroup, nodeGroups.length]);
+  }, [activeGroup, nodeGroups.length, showOfflineTab]);
 
   useEffect(() => {
     if (!showExpiryTime && sortField === "days") {
@@ -504,7 +513,10 @@ export function NodeTable({
     const lowerSearch = searchTerm.trim().toLowerCase();
     return nodes.filter((node) => {
       const matchGroup =
-        activeGroup === ALL_NODE_GROUP || node.nodeGroup === activeGroup;
+        activeGroup === ALL_NODE_GROUP ||
+        (activeGroup === OFFLINE_NODE_GROUP
+          ? showOfflineTab && !node.online
+          : node.nodeGroup === activeGroup);
       const matchSearch = lowerSearch
         ? node.name.toLowerCase().includes(lowerSearch) ||
           node.location.toLowerCase().includes(lowerSearch) ||
@@ -516,13 +528,21 @@ export function NodeTable({
         : true;
       return matchGroup && matchSearch;
     });
-  }, [nodes, activeGroup, searchTerm]);
+  }, [nodes, activeGroup, searchTerm, showOfflineTab]);
 
   // Sorting — "default" keeps the order returned by the Komari backend
   // (already weighted + offline-positioned upstream in useKomariNodes).
   const sortedNodes = useMemo(
     () => sortNodeList(filteredNodes, sortField, sortOrder, billingLabels),
     [filteredNodes, sortField, sortOrder, billingLabels],
+  );
+  const {
+    displayedItems: displayedNodes,
+    className: collectionMotionClass,
+    transitioning: collectionTransitioning,
+  } = useCollectionTransition(
+    sortedNodes,
+    `${effectiveViewMode}:${activeGroup}`,
   );
 
   const listColSpan =
@@ -566,8 +586,11 @@ export function NodeTable({
     () => [
       { id: ALL_NODE_GROUP, label: allGroupsLabel(lang) },
       ...nodeGroups.map((group) => ({ id: group, label: group })),
+      ...(showOfflineTab
+        ? [{ id: OFFLINE_NODE_GROUP, label: t.lblOfflineGroup }]
+        : []),
     ],
-    [lang, nodeGroups],
+    [lang, nodeGroups, showOfflineTab, t.lblOfflineGroup],
   );
 
   const viewModeTabs = useMemo(
@@ -607,7 +630,7 @@ export function NodeTable({
       }`}
     >
       <span>
-        {t.matchingInstances}: {sortedNodes.length} / {nodes.length}
+        {t.matchingInstances}: {displayedNodes.length} / {nodes.length}
       </span>
       <div className="flex items-center gap-2 relative z-30">
         <span>{t.sort}:</span>
@@ -708,7 +731,7 @@ export function NodeTable({
   }, []);
 
   return (
-    <div className={`w-full space-y-6 lg:space-y-8 font-sans ${zenType.body} ${zenText.primary}`}>
+    <div className={`km-node-display w-full space-y-6 lg:space-y-8 font-sans ${zenType.body} ${zenText.primary}`}>
       {/* Mobile toolbar card */}
       <div
         className={`space-y-4 lg:hidden rounded-xl border p-4 ${toolbarPanelClass}`}
@@ -864,8 +887,11 @@ export function NodeTable({
 
       {/* VIEW STATE 1: HIGH-DENSITY BULLET-ALIGNED LIST VIEW */}
       {effectiveViewMode === "list" ? (
-        <div className="overflow-x-auto w-full">
-          <table className="w-full min-w-[1100px] text-left select-none border-collapse">
+        <div
+          className={`overflow-x-auto w-full ${collectionMotionClass}`}
+          aria-busy={collectionTransitioning}
+        >
+          <table className="km-ui-table w-full min-w-[1100px] text-left select-none border-collapse">
             <thead>
               <tr className={`${textMuted} ${zenType.caption} zen-track-tight uppercase border-b ${borderBottomClass} whitespace-nowrap`}>
                 {renderSortHeader("name", t.name)}
@@ -880,14 +906,14 @@ export function NodeTable({
               </tr>
             </thead>
             <tbody className={`${zenType.data} font-mono whitespace-nowrap`}>
-              {sortedNodes.length === 0 ? (
+              {displayedNodes.length === 0 ? (
                 <tr>
                   <td colSpan={listColSpan} className={`py-16 text-center ${textMuted} italic uppercase tracking-[0.2em] font-sans`}>
                      {t.noInstances}
                   </td>
                 </tr>
               ) : (
-                sortedNodes.map((node) => {
+                displayedNodes.map((node) => {
                   const cpuColor =
                     node.cpuUsage > 75
                       ? "text-zen-danger font-bold" 
@@ -915,7 +941,7 @@ export function NodeTable({
                     <tr
                       key={node.id}
                       onClick={() => onSelectNode(node)}
-                      className={`cursor-pointer group border-b border-zen-line hover:bg-zen-elevate transition-[background-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                      className={`km-ui-table-row cursor-pointer group border-b border-zen-line hover:bg-zen-elevate transition-[background-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
                         !node.online ? "opacity-35 grayscale contrast-75 saturate-50 select-none" : ""
                       }`}
                     >
@@ -1052,13 +1078,16 @@ export function NodeTable({
         </div>
       ) : (
         /* VIEW STATE 2: CARD GRID VIEW (Fully localized with zero mixed layouts) */
-        <div className="grid grid-cols-1 items-start gap-4 pt-4 @min-[640px]:grid-cols-2 @min-[901px]:grid-cols-3 @min-[1300px]:grid-cols-4 @min-[1600px]:grid-cols-5">
-          {sortedNodes.length === 0 ? (
+        <div
+          className={`grid grid-cols-1 items-start gap-4 pt-4 @min-[640px]:grid-cols-2 @min-[901px]:grid-cols-3 @min-[1300px]:grid-cols-4 @min-[1600px]:grid-cols-5 ${collectionMotionClass}`}
+          aria-busy={collectionTransitioning}
+        >
+          {displayedNodes.length === 0 ? (
             <div className={`col-span-full py-16 text-center ${textMuted} italic uppercase tracking-[0.2em] font-sans`}>
               {t.noInstances}
             </div>
           ) : (
-            sortedNodes.map((node) => {
+            displayedNodes.map((node) => {
               const isSelected = selectedNodeId === node.id;
               const cpuColor =
                 node.cpuUsage > 75
@@ -1087,7 +1116,7 @@ export function NodeTable({
                 <div
                   key={node.id}
                   onClick={() => onSelectNode(node)}
-                  className={`cursor-pointer group flex flex-col gap-3 p-4 sm:p-5 rounded-xl border border-zen-line bg-zen-elevate shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zen-line-strong hover:shadow-[0_4px_14px_rgba(0,0,0,0.06)] ${zenMotion.card} ${!node.online ? "opacity-35 grayscale contrast-75 saturate-50 select-none" : ""}`}
+                  className={`km-node-card cursor-pointer group flex flex-col gap-3 p-4 sm:p-5 rounded-xl border border-zen-line bg-zen-elevate shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zen-line-strong hover:shadow-[0_4px_14px_rgba(0,0,0,0.06)] ${zenMotion.card} ${!node.online ? "opacity-35 grayscale contrast-75 saturate-50 select-none" : ""}`}
                 >
                   {/* Card header：标签与标题同一行，不额外占高 */}
                   <div className="flex items-center gap-2 min-w-0">

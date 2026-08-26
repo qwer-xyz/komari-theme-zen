@@ -3,7 +3,11 @@ import { useRPC2Call } from "@/contexts/RPC2Context";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import type { PingRecordsResponse } from "@/types/records";
 
-export function usePingRecords(uuid: string, hours: number) {
+export function usePingRecords(
+  uuid: string,
+  hours: number,
+  taskIds: number[] = [],
+) {
   const { call } = useRPC2Call();
   const { publicInfo } = usePublicInfo();
   const [data, setData] = useState<PingRecordsResponse | null>(null);
@@ -31,10 +35,17 @@ export function usePingRecords(uuid: string, hours: number) {
     )
       .then((result) => {
         if (cancelled) return;
+        const allowedTasks = new Set(taskIds);
+        const tasks = (result?.tasks ?? []).filter(
+          (task) => allowedTasks.size === 0 || allowedTasks.has(task.id),
+        );
         setData({
           count: result?.count ?? 0,
-          records: result?.records ?? [],
-          tasks: result?.tasks ?? [],
+          records: (result?.records ?? []).filter(
+            (record) =>
+              allowedTasks.size === 0 || allowedTasks.has(record.task_id),
+          ),
+          tasks,
         });
       })
       .catch((e: Error) => {
@@ -49,7 +60,7 @@ export function usePingRecords(uuid: string, hours: number) {
     return () => {
       cancelled = true;
     };
-  }, [uuid, hours, call, publicInfo?.record_enabled]);
+  }, [uuid, hours, taskIds.join(","), call, publicInfo?.record_enabled]);
 
   return { data, isLoading, error };
 }

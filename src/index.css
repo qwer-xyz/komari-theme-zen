@@ -319,6 +319,41 @@ body {
   }
 }
 
+@keyframes zen-node-collection-leave {
+  0% {
+    opacity: 1;
+    transform: perspective(1600px) translateX(0) rotateY(0deg);
+    box-shadow: 0 0 0 transparent;
+  }
+  to {
+    opacity: 0.1;
+    transform: perspective(1600px) translateX(-6px) rotateY(-3.2deg);
+    box-shadow: 18px 0 28px -26px var(--zen-line-strong);
+  }
+}
+
+@keyframes zen-node-collection-enter {
+  0% {
+    opacity: 0.14;
+    transform: perspective(1600px) translateX(8px) rotateY(3.6deg);
+    box-shadow: -18px 0 28px -26px var(--zen-line-strong);
+  }
+  54% {
+    opacity: 1;
+    transform: perspective(1600px) translateX(-1px) rotateY(-0.45deg);
+    box-shadow: 3px 0 12px -14px var(--zen-line);
+  }
+  76% {
+    transform: perspective(1600px) translateX(0.3px) rotateY(0.15deg);
+    box-shadow: 0 0 0 transparent;
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(1600px) translateX(0) rotateY(0deg);
+    box-shadow: 0 0 0 transparent;
+  }
+}
+
 @keyframes zen-motion-page-enter-forward {
   0% {
     opacity: 0;
@@ -391,6 +426,21 @@ body {
 
   .zen-motion-content-reveal {
     animation: zen-motion-content-reveal 480ms var(--zen-ease-spring) both;
+  }
+
+  .zen-node-collection-leave {
+    pointer-events: none;
+    transform-origin: left center;
+    backface-visibility: hidden;
+    animation: zen-node-collection-leave 140ms var(--zen-ease-out) both;
+    will-change: opacity, transform, box-shadow;
+  }
+
+  .zen-node-collection-enter {
+    transform-origin: left center;
+    backface-visibility: hidden;
+    animation: zen-node-collection-enter 460ms var(--zen-ease-smooth) both;
+    will-change: opacity, transform, box-shadow;
   }
 
   .zen-page-transition-root {
@@ -515,6 +565,13 @@ body {
   .zen-motion-page-enter-back,
   .zen-motion-menu-panel {
     animation: none !important;
+  }
+
+  .zen-node-collection-leave,
+  .zen-node-collection-enter {
+    animation: none !important;
+    transform: none !important;
+    box-shadow: none !important;
   }
 
   .zen-motion-sliding-indicator,

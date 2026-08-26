@@ -42,6 +42,10 @@ export interface VPSNode {
   netSpeedIn: number;  // current KB/s incoming
   netSpeedOut: number; // current KB/s outgoing
   latency: number;     // ping latency in ms
+  pingLoss: number;
+  pingVolatility: number;
+  pingTaskCount: number;
+  pingWorstTask: string;
   latencyHistory: LatencySample[];
   price: number;
   currency: string;

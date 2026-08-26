@@ -21,6 +21,7 @@ export type ThemeSettings = {
   customLogoUrl: string;
   logoShape: LogoShape;
   offlineServerPosition: string;
+  showOfflineGroup: boolean;
   showExpiryTime: boolean;
   showAutoRenewal: boolean;
   showResidualValue: boolean;
@@ -29,11 +30,14 @@ export type ThemeSettings = {
   dashboardOverviewSections: DashboardOverviewSections;
   dashboardCpuMetric: DashboardCpuMetric;
   dashboardBandwidthMetric: DashboardBandwidthMetric;
+  dashboardNodeIds: string[];
+  pingTaskIds: number[];
   customFooterHtml: string;
   defaultViewMode: NodeViewMode;
   defaultSortField: string;
   defaultSortOrder: string;
   showLatency: boolean;
+  showNetworkQuality: boolean;
   showNodeMap: boolean;
   latencyColorConfig: LatencyColorConfig;
   colorScheme: ColorSchemeSettings;
@@ -77,6 +81,23 @@ function parseDashboardBandwidthMetric(raw: unknown): DashboardBandwidthMetric {
   return metric === "Max" ? "Max" : "Total";
 }
 
+function parseArraySetting<T extends string | number>(
+  raw: unknown,
+  kind: "string" | "number",
+): T[] {
+  let value = raw;
+  if (typeof raw === "string") {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(value)) return [];
+  const normalized = value.filter((item): item is T => typeof item === kind);
+  return [...new Set(normalized)];
+}
+
 export function useThemeSettings(): ThemeSettings {
   const { publicInfo } = usePublicInfo();
   const raw = (publicInfo?.theme_settings ?? {}) as Record<string, unknown>;
@@ -90,6 +111,7 @@ export function useThemeSettings(): ThemeSettings {
       raw.offlineServerPosition,
       "Last",
     ),
+    showOfflineGroup: raw.showOfflineGroup === true,
     showExpiryTime: raw.showExpiryTime !== false,
     showAutoRenewal: raw.showAutoRenewal !== false,
     showResidualValue: raw.showResidualValue === true,
@@ -107,11 +129,14 @@ export function useThemeSettings(): ThemeSettings {
     dashboardBandwidthMetric: parseDashboardBandwidthMetric(
       raw.dashboardBandwidthMetric,
     ),
+    dashboardNodeIds: parseArraySetting<string>(raw.dashboardNodeIds, "string"),
+    pingTaskIds: parseArraySetting<number>(raw.pingTaskIds, "number"),
     customFooterHtml: (raw.customFooterHtml as string | undefined) ?? "",
     defaultViewMode: parseDefaultViewMode(raw.defaultViewMode),
     defaultSortField: parseThemeSelectOption(raw.defaultSortField, "Default"),
     defaultSortOrder: parseThemeSelectOption(raw.defaultSortOrder, "Ascending"),
     showLatency: raw.showLatency !== false,
+    showNetworkQuality: raw.showNetworkQuality !== false,
     showNodeMap: raw.showNodeMap !== false,
     latencyColorConfig: latencyColorConfigFromTheme(raw),
     colorScheme: colorSchemeFromTheme(raw),

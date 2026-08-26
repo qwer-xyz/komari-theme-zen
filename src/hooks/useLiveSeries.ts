@@ -65,8 +65,10 @@ export function useLiveSeries(
 
   useEffect(() => {
     if (!enabled) return;
+    let timer: number | undefined;
 
     const tick = () => {
+      if (document.hidden) return;
       const n = nodeRef.current;
       if (!n || !n.online) return;
       setSamples((prev) => {
@@ -76,9 +78,30 @@ export function useLiveSeries(
       });
     };
 
+    const scheduleNext = () => {
+      if (document.hidden) return;
+      timer = window.setTimeout(() => {
+        tick();
+        scheduleNext();
+      }, LIVE_INTERVAL_MS);
+    };
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (timer) window.clearTimeout(timer);
+        return;
+      }
+      tick();
+      scheduleNext();
+    };
+
     tick();
-    const id = window.setInterval(tick, LIVE_INTERVAL_MS);
-    return () => window.clearInterval(id);
+    scheduleNext();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [enabled, nodeId, capacity]);
 
   return samples;

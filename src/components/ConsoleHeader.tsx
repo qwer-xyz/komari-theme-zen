@@ -241,10 +241,11 @@ function LocalClock({
   const [timeZone, setTimeZone] = useState<string>("");
 
   useEffect(() => {
+    let interval: number | undefined;
+    setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+
     const updateTime = () => {
       const now = new Date();
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      setTimeZone(tz);
       setLocalTime(
         now.toLocaleString(undefined, {
           hour: "2-digit",
@@ -261,9 +262,29 @@ function LocalClock({
         }),
       );
     };
-    updateTime();
-    const interval = window.setInterval(updateTime, 1000);
-    return () => window.clearInterval(interval);
+
+    const stopClock = () => {
+      if (interval !== undefined) {
+        window.clearInterval(interval);
+        interval = undefined;
+      }
+    };
+    const startClock = () => {
+      stopClock();
+      updateTime();
+      interval = window.setInterval(updateTime, 1000);
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) stopClock();
+      else startClock();
+    };
+
+    if (!document.hidden) startClock();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      stopClock();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, [compact]);
 
   return (
@@ -322,6 +343,8 @@ export function ConsoleHeader({
     dashboardOverviewSections,
     dashboardCpuMetric,
     dashboardBandwidthMetric,
+    dashboardNodeIds,
+    showNetworkQuality,
   } = useThemeSettings();
   const showOverviewHeroes =
     dashboardOverviewSections === "All" ||
@@ -332,13 +355,19 @@ export function ConsoleHeader({
   const siteName = publicInfo?.sitename || "Komari";
   const siteDescription = publicInfo?.description?.trim();
   const mapNodes = useStableMapNodes(nodes);
+  const overviewNodes = useMemo(() => {
+    if (dashboardNodeIds.length === 0) return nodes;
+    const selected = new Set(dashboardNodeIds);
+    const scoped = nodes.filter((node) => selected.has(node.id));
+    return scoped.length > 0 ? scoped : nodes;
+  }, [dashboardNodeIds.join(","), nodes]);
   const residualValue = useResidualValueSummary(
-    nodes,
+    overviewNodes,
     showResidualValue && showOverviewStats && view === "dashboard",
     residualValueCurrency,
   );
   const overviewTrends = useDashboardOverviewTrends(
-    nodes,
+    overviewNodes,
     view === "dashboard" &&
       dashboardOverviewLayout === "Panel" &&
       showOverviewHeroes,
@@ -360,12 +389,12 @@ export function ConsoleHeader({
     return () => document.removeEventListener("pointerdown", onDocPointerDown);
   }, [langOpen]);
 
-  const totalOnline = nodes.filter((n) => n.online).length;
-  const totalNodes = nodes.length;
+  const totalOnline = overviewNodes.filter((n) => n.online).length;
+  const totalNodes = overviewNodes.length;
 
-  const totalUsedIn = nodes.reduce((sum, n) => sum + n.bandwidthUsedIn, 0);
-  const totalUsedOut = nodes.reduce((sum, n) => sum + n.bandwidthUsedOut, 0);
-  const totalBillableUsed = nodes.reduce(
+  const totalUsedIn = overviewNodes.reduce((sum, n) => sum + n.bandwidthUsedIn, 0);
+  const totalUsedOut = overviewNodes.reduce((sum, n) => sum + n.bandwidthUsedOut, 0);
+  const totalBillableUsed = overviewNodes.reduce(
     (sum, n) =>
       sum +
       resolveTrafficUsedGb(
@@ -376,17 +405,17 @@ export function ConsoleHeader({
     0,
   );
 
-  const totalCores = nodes.reduce((sum, n) => sum + n.cpuCores, 0);
-  const totalMemory = nodes.reduce((sum, n) => sum + n.memoryTotal, 0);
-  const totalDisk = nodes.reduce((sum, n) => sum + n.diskTotal, 0);
+  const totalCores = overviewNodes.reduce((sum, n) => sum + n.cpuCores, 0);
+  const totalMemory = overviewNodes.reduce((sum, n) => sum + n.memoryTotal, 0);
+  const totalDisk = overviewNodes.reduce((sum, n) => sum + n.diskTotal, 0);
 
-  const totalMemoryUsed = nodes.reduce((sum, n) => sum + n.memoryUsed, 0);
-  const totalDiskUsed = nodes.reduce((sum, n) => sum + n.diskUsed, 0);
+  const totalMemoryUsed = overviewNodes.reduce((sum, n) => sum + n.memoryUsed, 0);
+  const totalDiskUsed = overviewNodes.reduce((sum, n) => sum + n.diskUsed, 0);
 
   const avgMemoryPercent = totalMemory > 0 ? (totalMemoryUsed / totalMemory) * 100 : 0;
   const avgDiskPercent = totalDisk > 0 ? (totalDiskUsed / totalDisk) * 100 : 0;
 
-  const onlineNodes = nodes.filter((n) => n.online);
+  const onlineNodes = overviewNodes.filter((n) => n.online);
   const avgCpuUsage = onlineNodes.length
     ? onlineNodes.reduce((sum, n) => sum + n.cpuUsage, 0) / onlineNodes.length
     : 0;
@@ -400,8 +429,8 @@ export function ConsoleHeader({
   const mobileCpuLabel =
     dashboardCpuMetric === "Max" ? tm.cpuMax : tm.cpuAvg;
 
-  const totalRxSpeed = nodes.reduce((sum, n) => sum + (n.online ? n.netSpeedIn : 0), 0);
-  const totalTxSpeed = nodes.reduce((sum, n) => sum + (n.online ? n.netSpeedOut : 0), 0);
+  const totalRxSpeed = overviewNodes.reduce((sum, n) => sum + (n.online ? n.netSpeedIn : 0), 0);
+  const totalTxSpeed = overviewNodes.reduce((sum, n) => sum + (n.online ? n.netSpeedOut : 0), 0);
   const totalRealtimeSpeed = totalRxSpeed + totalTxSpeed; // in KB/s
   const maxRealtimeSpeed = onlineNodes.length
     ? Math.max(...onlineNodes.map((n) => n.netSpeedIn + n.netSpeedOut))
@@ -440,8 +469,39 @@ export function ConsoleHeader({
   // Unique geographic regions — node.flag holds the region code (node.region),
   // whereas node.location is group-first and would miscount.
   const totalRegions = new Set(
-    nodes.map((n) => n.flag).filter((f) => f && f !== "🌐"),
+    overviewNodes.map((n) => n.flag).filter((f) => f && f !== "🌐"),
   ).size;
+
+  const latencyNodes = onlineNodes.filter((node) => node.pingTaskCount > 0);
+  const averageLatency = latencyNodes.length
+    ? latencyNodes.reduce((sum, node) => sum + node.latency, 0) /
+      latencyNodes.length
+    : 0;
+  const peakLossNode = latencyNodes.reduce<VPSNode | null>(
+    (peak, node) => (!peak || node.pingLoss > peak.pingLoss ? node : peak),
+    null,
+  );
+  const unstableNodes = latencyNodes.filter(
+    (node) => node.pingLoss >= 1 || node.pingVolatility >= 0.6,
+  );
+  const attentionNode = unstableNodes.reduce<VPSNode | null>(
+    (worst, node) =>
+      !worst ||
+      node.pingLoss > worst.pingLoss ||
+      (node.pingLoss === worst.pingLoss &&
+        node.pingVolatility > worst.pingVolatility)
+        ? node
+        : worst,
+    null,
+  );
+  const networkHealthTone =
+    latencyNodes.length === 0
+      ? "quiet"
+      : (peakLossNode?.pingLoss ?? 0) >= 5 || averageLatency >= 300
+        ? "danger"
+        : unstableNodes.length > 0 || averageLatency >= 150
+          ? "warning"
+          : "stable";
 
   const residualValueLabel = residualValue.loading
     ? "..."
@@ -611,7 +671,7 @@ export function ConsoleHeader({
   };
 
   return (
-    <header className={`font-sans ${zenType.body} uppercase select-none`}>
+    <header className={`km-navbar font-sans ${zenType.body} uppercase select-none`}>
       {/* 1. Responsive Top Bar with absolute vertical alignment (items-center) */}
       <div className={view === "detail" ? "pb-4 md:pb-5 border-b border-zen-line" : "pb-8 md:pb-10"}>
         <div className="md:hidden space-y-1">
@@ -764,6 +824,47 @@ export function ConsoleHeader({
               showNodeMap={showNodeMap}
               nodeMapLabel={t.lblNodeDistribution}
               onOpenNodeMap={() => setMapOpen(true)}
+              networkHealth={
+                showNetworkQuality
+                  ? {
+                      label: t.overviewNetworkQuality,
+                      status:
+                        latencyNodes.length === 0
+                          ? t.overviewNetworkNoData
+                          : networkHealthTone === "stable"
+                            ? t.overviewNetworkStable
+                            : t.overviewNetworkAttention,
+                      tone: networkHealthTone,
+                      metrics: [
+                        {
+                          label: t.overviewAverageLatency,
+                          value: latencyNodes.length
+                            ? `${averageLatency.toFixed(0)} ms`
+                            : "—",
+                          detail: latencyNodes.length
+                            ? `${latencyNodes.length} ${t.unitNodes}`
+                            : undefined,
+                        },
+                        {
+                          label: t.overviewPeakLoss,
+                          value: peakLossNode
+                            ? `${peakLossNode.pingLoss.toFixed(1)}%`
+                            : "—",
+                          detail: peakLossNode
+                            ? `${t.overviewWorstNode}: ${peakLossNode.name}`
+                            : undefined,
+                        },
+                        {
+                          label: t.overviewUnstableNodes,
+                          value: latencyNodes.length
+                            ? `${unstableNodes.length} / ${latencyNodes.length}`
+                            : "—",
+                          detail: attentionNode?.name,
+                        },
+                      ],
+                    }
+                  : undefined
+              }
             />
           ) : (
             <>

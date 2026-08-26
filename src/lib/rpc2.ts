@@ -27,6 +27,7 @@ export class RPC2Client {
   private reconnectTimeout?: ReturnType<typeof setTimeout>;
   private heartbeatInterval?: ReturnType<typeof setInterval>;
   private eventListeners: RPC2EventListeners = {};
+  private manuallyDisconnected = false;
 
   private readonly baseUrl: string;
   private readonly options: Required<RPC2ConnectionOptions>;
@@ -68,6 +69,7 @@ export class RPC2Client {
       return;
     }
 
+    this.manuallyDisconnected = false;
     this.setConnectionState(RPC2ConnectionState.CONNECTING);
 
     try {
@@ -114,7 +116,7 @@ export class RPC2Client {
   }
 
   disconnect(): void {
-    this.options.autoReconnect = false;
+    this.manuallyDisconnected = true;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = undefined;
@@ -294,6 +296,7 @@ export class RPC2Client {
       this.eventListeners.onDisconnect?.();
 
       if (
+        !this.manuallyDisconnected &&
         this.options.autoReconnect &&
         this.reconnectAttempts < this.options.maxReconnectAttempts
       ) {

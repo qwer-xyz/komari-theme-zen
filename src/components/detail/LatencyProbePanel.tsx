@@ -88,6 +88,7 @@ interface LatencyProbePanelProps {
   onToggleProbe: (id: string) => void;
   lang: Lang;
   theme: "light" | "dark";
+  taskIds?: number[];
 }
 
 export function LatencyProbePanel({
@@ -98,6 +99,7 @@ export function LatencyProbePanel({
   onToggleProbe,
   lang,
   theme,
+  taskIds = [],
 }: LatencyProbePanelProps) {
   const t = translations[lang];
   const [peakClipping, setPeakClipping] = React.useState(false);
@@ -105,7 +107,7 @@ export function LatencyProbePanel({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = React.useState(1000);
 
-  const { data, isLoading } = usePingRecords(uuid, hours);
+  const { data, isLoading } = usePingRecords(uuid, hours, taskIds);
 
   React.useEffect(() => {
     onLoadingChange?.(isLoading);

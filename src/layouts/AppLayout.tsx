@@ -23,12 +23,26 @@ import { sanitizeFooterHtml } from "@/lib/sanitizeHtml";
 
 export function AppLayout() {
   useSiteMeta();
-  const { nodes, isLoading, error } = useKomariNodes();
+  const isInstancePage = Boolean(
+    useMatch({ path: "/instance/:uuid", end: true }),
+  );
+  const isPluginPage = Boolean(useMatch({ path: "/plugin/:short/*" }));
+  const isDetail = isInstancePage || isPluginPage;
+  const {
+    customFooterHtml,
+    showNodeMap,
+    showLatency,
+    showNetworkQuality,
+    colorScheme,
+    fontScheme,
+  } = useThemeSettings();
+  const { nodes, isLoading, error } = useKomariNodes({
+    loadPingSummary: !isDetail && showNetworkQuality,
+    loadLatencyHistory: !isDetail && showLatency,
+  });
   const { theme, preference: themePreference, setPreference: setThemePreference } =
     useThemePreference();
   const { lang, setPreference: setLangPreference } = useLangPreference();
-  const { customFooterHtml, showNodeMap, colorScheme, fontScheme } =
-    useThemeSettings();
   useColorScheme(
     theme,
     colorScheme.presetId,
@@ -38,8 +52,6 @@ export function AppLayout() {
   const komariVersion = useKomariVersion();
   const themeVersion = __THEME_VERSION__;
   const t = translations[lang];
-
-  const isDetail = Boolean(useMatch({ path: "/instance/:uuid", end: true }));
 
   const textMutedClass = `${zenText.subtle}/85`;
   const bgClass = "bg-zen-bg text-zen-fg";
@@ -73,7 +85,7 @@ export function AppLayout() {
 
   return (
     <div
-      className={`min-h-screen px-4 pt-4 pb-5 sm:px-6 sm:pt-6 sm:pb-6 md:px-12 md:pt-12 md:pb-8 select-none antialiased transition-colors duration-300 ${bgClass}`}
+      className={`km-layout min-h-screen px-4 pt-4 pb-5 sm:px-6 sm:pt-6 sm:pb-6 md:px-12 md:pt-12 md:pb-8 select-none antialiased transition-colors duration-300 ${bgClass}`}
     >
       <div className="mx-auto w-full max-w-[1600px] @container">
         <div
@@ -93,16 +105,16 @@ export function AppLayout() {
           />
 
           <main
-            className={
+            className={`km-main ${
               isDetail ? "space-y-4 md:space-y-5" : "space-y-2 md:space-y-3"
-            }
+            }`}
           >
             <AnimatedOutlet context={outletContext} />
           </main>
         </div>
 
         <footer
-          className={`mt-6 md:mt-7 pt-5 sm:pt-6 md:pt-8 border-t ${zenBorder.default} text-center ${textMutedClass} leading-relaxed`}
+          className={`km-footer mt-6 md:mt-7 pt-5 sm:pt-6 md:pt-8 border-t ${zenBorder.default} text-center ${textMutedClass} leading-relaxed`}
         >
           <div className={`${zenType.caption} sm:text-xs tracking-wide font-mono`}>
             <div className="sm:hidden whitespace-nowrap">
