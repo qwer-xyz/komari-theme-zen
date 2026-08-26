@@ -23,6 +23,11 @@ import { NodeDistributionMapModal } from "@/components/NodeDistributionMapModal"
 import type { NodeDistributionMapNode } from "@/components/NodeDistributionMap";
 import { ResidualValueModal } from "@/components/ResidualValueModal";
 import { useResidualValueSummary } from "@/hooks/useResidualValueSummary";
+import { useDashboardOverviewTrends } from "@/hooks/useDashboardOverviewTrends";
+import {
+  DashboardOverviewPanel,
+  overviewIcons,
+} from "@/components/DashboardOverviewPanel";
 
 const NodeDistributionMap = lazy(() =>
   import("@/components/NodeDistributionMap").then((m) => ({
@@ -313,16 +318,32 @@ export function ConsoleHeader({
     logoShape,
     showResidualValue,
     residualValueCurrency,
+    dashboardOverviewLayout,
+    dashboardOverviewSections,
     dashboardCpuMetric,
     dashboardBandwidthMetric,
   } = useThemeSettings();
+  const showOverviewHeroes =
+    dashboardOverviewSections === "All" ||
+    dashboardOverviewSections === "Heroes";
+  const showOverviewStats =
+    dashboardOverviewSections === "All" ||
+    dashboardOverviewSections === "Stats";
   const siteName = publicInfo?.sitename || "Komari";
   const siteDescription = publicInfo?.description?.trim();
   const mapNodes = useStableMapNodes(nodes);
   const residualValue = useResidualValueSummary(
     nodes,
-    showResidualValue && view === "dashboard",
+    showResidualValue && showOverviewStats && view === "dashboard",
     residualValueCurrency,
+  );
+  const overviewTrends = useDashboardOverviewTrends(
+    nodes,
+    view === "dashboard" &&
+      dashboardOverviewLayout === "Panel" &&
+      showOverviewHeroes,
+    dashboardCpuMetric,
+    dashboardBandwidthMetric,
   );
 
   useEffect(() => {
@@ -648,7 +669,106 @@ export function ConsoleHeader({
       {/* 2. RESTRUCTURED HIGH-DENSITY BALANCED TELEMETRY CHANNELS */}
       {view !== "detail" && (
         <>
+          {dashboardOverviewLayout === "Panel" ? (
+            <DashboardOverviewPanel
+              showHeroes={showOverviewHeroes}
+              showStats={showOverviewStats}
+              heroes={[
+                {
+                  label: t.lblClusterNodeStatus,
+                  value: String(totalOnline),
+                  suffix: `/ ${totalNodes}`,
+                  caption:
+                    totalNodes > 0 && totalOnline === totalNodes
+                      ? t.overviewAllOnline
+                      : t.overviewOfflineCount(totalNodes - totalOnline),
+                  icon: overviewIcons.nodeStatus,
+                },
+                {
+                  label: dashboardCpuLabel,
+                  value: dashboardCpuUsage.toFixed(1),
+                  suffix: "%",
+                  caption: t.overviewRecentHourTrend,
+                  icon: overviewIcons.cpu,
+                  chartValues: overviewTrends.cpu,
+                },
+                {
+                  label: dashboardBandwidthLabel,
+                  value: speedVal,
+                  suffix: speedUnit,
+                  caption: t.overviewRecentHourTrend,
+                  icon: overviewIcons.bandwidth,
+                  chartValues: overviewTrends.bandwidth,
+                },
+              ]}
+              stats={[
+                showResidualValue
+                  ? {
+                      label: t.residualValueTitle,
+                      value: residualValueButton({
+                        className: "max-w-full",
+                        align: "left",
+                      }),
+                      icon: overviewIcons.residual,
+                    }
+                  : {
+                      label: t.lblOfflineNodes,
+                      value: String(totalNodes - totalOnline),
+                      icon: overviewIcons.nodeStatus,
+                    },
+                {
+                  label: t.lblTotalRegions,
+                  value: String(totalRegions),
+                  icon: overviewIcons.regions,
+                },
+                {
+                  label: t.lblCores,
+                  value: `${totalCores} ${t.lblThreads}`,
+                  icon: overviewIcons.cores,
+                },
+                {
+                  label: t.lblMemory,
+                  value: formatResourceUsageSummary(
+                    totalMemoryUsed,
+                    totalMemory,
+                    avgMemoryPercent,
+                  ),
+                  icon: overviewIcons.memory,
+                },
+                {
+                  label: t.lblDisk,
+                  value: formatResourceUsageSummary(
+                    totalDiskUsed,
+                    totalDisk,
+                    avgDiskPercent,
+                    { usedDigits: 0, totalDigits: 0 },
+                  ),
+                  icon: overviewIcons.disk,
+                },
+                {
+                  label: t.cumulativeBandwidth,
+                  value: `${formattedBandwidth} ${bandwidthUnit}`,
+                  icon: overviewIcons.traffic,
+                },
+                {
+                  label: t.lblInboundRxShort || "RX",
+                  value: formatTrafficGb(totalUsedIn),
+                  icon: overviewIcons.rx,
+                },
+                {
+                  label: t.lblOutboundTxShort || "TX",
+                  value: formatTrafficGb(totalUsedOut),
+                  icon: overviewIcons.tx,
+                },
+              ]}
+              showNodeMap={showNodeMap}
+              nodeMapLabel={t.lblNodeDistribution}
+              onOpenNodeMap={() => setMapOpen(true)}
+            />
+          ) : (
+            <>
           {/* Mobile: three hero metrics in one row */}
+          {showOverviewHeroes ? (
           <div className="grid grid-cols-3 gap-1.5 pt-6 md:hidden">
             <MobileMetricHero
               label={tm.nodeStatus}
@@ -675,8 +795,10 @@ export function ConsoleHeader({
               textUnit={textUnit}
             />
           </div>
+          ) : null}
 
           {/* Mobile: detail rows stacked */}
+          {showOverviewStats ? (
           <div
             className={`md:hidden pt-4 ${zenType.data} font-mono leading-relaxed tracking-wider divide-y divide-zen-line`}
           >
@@ -784,8 +906,10 @@ export function ConsoleHeader({
             ) : null}
             </div>
           </div>
+          ) : null}
 
           {/* Desktop: three columns with hero + details each */}
+          {showOverviewHeroes ? (
           <div className="hidden md:grid md:grid-cols-3 gap-8 pt-8 md:pt-10">
           {/* Metric 1: Cluster Nodes Status */}
           <div className="flex flex-col justify-start space-y-4">
@@ -864,8 +988,10 @@ export function ConsoleHeader({
             </div>
           </div>
           </div>
+          ) : null}
 
           {/* Unified supplementary stats — aligned matrix below the heroes */}
+          {showOverviewStats ? (
           <div className="hidden md:grid md:grid-cols-4 pt-7 mt-1 border-t border-zen-line font-mono [&>*]:border-zen-line [&>*]:px-5 [&>*]:py-3 [&>*:nth-child(4n+1)]:pl-0 [&>*:nth-child(4n)]:pr-0 [&>*:not(:nth-child(4n+1))]:border-l [&>*:nth-child(n+5)]:border-t">
             {showResidualValue ? (
               <div className="flex flex-col gap-1">
@@ -923,6 +1049,9 @@ export function ConsoleHeader({
               <span className={`${zenType.data} font-bold ${textPrimary}`}>{formatTrafficGb(totalUsedOut)}</span>
             </div>
           </div>
+          ) : null}
+            </>
+          )}
         </>
       )}
 

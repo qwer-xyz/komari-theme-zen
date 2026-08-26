@@ -2,7 +2,7 @@
   "name": "Komari Zen",
   "short": "Zen",
   "description": "基于极简主义设计理念的 Komari 主题。",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "qwer-xyz",
   "url": "https://github.com/qwer-xyz/komari-theme-zen",
   "preview": "preview.png",
@@ -179,6 +179,34 @@
         "help": {
           "en": "Show the dashboard map.",
           "zh-CN": "显示首页地图。"
+        }
+      },
+      {
+        "key": "dashboardOverviewLayout",
+        "type": "select",
+        "name": {
+          "en": "Homepage overview layout",
+          "zh-CN": "首页概览布局"
+        },
+        "options": "面板布局 Panel,经典布局 Classic",
+        "default": "面板布局 Panel",
+        "help": {
+          "en": "Panel is the default overview; Classic preserves the original flat layout.",
+          "zh-CN": "面板布局为默认新版；经典布局保留原有的平铺样式。"
+        }
+      },
+      {
+        "key": "dashboardOverviewSections",
+        "type": "select",
+        "name": {
+          "en": "Homepage overview sections",
+          "zh-CN": "首页概览区块"
+        },
+        "options": "全部显示 All,仅核心概览 Heroes,仅详细统计 Stats,全部隐藏 None",
+        "default": "全部显示 All",
+        "help": {
+          "en": "Show both overview sections, either section, or neither section.",
+          "zh-CN": "控制首页核心概览与详细统计区块的显示方式。"
         }
       },
       {

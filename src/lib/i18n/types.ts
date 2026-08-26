@@ -117,6 +117,9 @@ export type Messages = {
   lblActiveProc: string;
   lblActiveProcesses: string;
   lblStatusOk: string;
+  overviewAllOnline: string;
+  overviewOfflineCount: (count: number) => string;
+  overviewRecentHourTrend: string;
   msgNodeOfflineAwaiting: string;
   pingNoTasks: string;
   pingLatencyDetection: string;
