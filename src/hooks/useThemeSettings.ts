@@ -25,6 +25,8 @@ export type ThemeSettings = {
   showAutoRenewal: boolean;
   showResidualValue: boolean;
   residualValueCurrency: string;
+  dashboardOverviewLayout: DashboardOverviewLayout;
+  dashboardOverviewSections: DashboardOverviewSections;
   dashboardCpuMetric: DashboardCpuMetric;
   dashboardBandwidthMetric: DashboardBandwidthMetric;
   customFooterHtml: string;
@@ -39,6 +41,8 @@ export type ThemeSettings = {
 };
 
 export type LogoShape = "Circle" | "RoundedSquare" | "Square";
+export type DashboardOverviewLayout = "Panel" | "Classic";
+export type DashboardOverviewSections = "All" | "Heroes" | "Stats" | "None";
 export type DashboardCpuMetric = "Average" | "Max";
 export type DashboardBandwidthMetric = "Total" | "Max";
 
@@ -51,6 +55,21 @@ function parseLogoShape(raw: unknown): LogoShape {
 function parseDashboardCpuMetric(raw: unknown): DashboardCpuMetric {
   const metric = parseThemeSelectOption(raw, "Average");
   return metric === "Max" ? "Max" : "Average";
+}
+
+function parseDashboardOverviewLayout(raw: unknown): DashboardOverviewLayout {
+  const layout = parseThemeSelectOption(raw, "Panel");
+  return layout === "Classic" ? "Classic" : "Panel";
+}
+
+function parseDashboardOverviewSections(
+  raw: unknown,
+): DashboardOverviewSections {
+  const sections = parseThemeSelectOption(raw, "All");
+  if (sections === "Heroes" || sections === "Stats" || sections === "None") {
+    return sections;
+  }
+  return "All";
 }
 
 function parseDashboardBandwidthMetric(raw: unknown): DashboardBandwidthMetric {
@@ -78,6 +97,12 @@ export function useThemeSettings(): ThemeSettings {
       typeof raw.residualValueCurrency === "string"
         ? raw.residualValueCurrency.trim()
         : "CNY",
+    dashboardOverviewLayout: parseDashboardOverviewLayout(
+      raw.dashboardOverviewLayout,
+    ),
+    dashboardOverviewSections: parseDashboardOverviewSections(
+      raw.dashboardOverviewSections,
+    ),
     dashboardCpuMetric: parseDashboardCpuMetric(raw.dashboardCpuMetric),
     dashboardBandwidthMetric: parseDashboardBandwidthMetric(
       raw.dashboardBandwidthMetric,
