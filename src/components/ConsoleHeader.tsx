@@ -3,11 +3,19 @@
  * SPDX-License-Identifier: MIT
  */
 
-import React, { useMemo, useState, useEffect, useRef, lazy, Suspense } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Link } from "react-router-dom";
 import { Settings, Globe } from "lucide-react";
 import { VPSNode } from "../types";
-import { translations, Lang, getLangMenuLabel, LANG_MENU_OPTIONS } from "../lib/i18n";
+import { translations, Lang, LANG_MENU_OPTIONS } from "../lib/i18n";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import {
   useThemeSettings,
@@ -36,6 +44,70 @@ const NodeDistributionMap = lazy(() =>
 );
 
 const KOMARI_DEFAULT_LOGO_URL = "/favicon.ico";
+
+let clockSnapshot = Date.now();
+let clockInterval: number | undefined;
+const clockListeners = new Set<() => void>();
+
+function updateClockSnapshot() {
+  clockSnapshot = Date.now();
+  clockListeners.forEach((listener) => listener());
+}
+
+function stopSharedClock() {
+  if (clockInterval !== undefined && typeof window !== "undefined") {
+    window.clearInterval(clockInterval);
+    clockInterval = undefined;
+  }
+}
+
+function startSharedClock() {
+  if (
+    typeof window === "undefined" ||
+    typeof document === "undefined" ||
+    document.hidden ||
+    clockListeners.size === 0
+  ) {
+    return;
+  }
+  stopSharedClock();
+  updateClockSnapshot();
+  clockInterval = window.setInterval(updateClockSnapshot, 1000);
+}
+
+function handleClockVisibilityChange() {
+  if (document.hidden) stopSharedClock();
+  else startSharedClock();
+}
+
+function subscribeToClock(listener: () => void) {
+  clockListeners.add(listener);
+  if (clockListeners.size === 1 && typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", handleClockVisibilityChange);
+  }
+  startSharedClock();
+
+  return () => {
+    clockListeners.delete(listener);
+    if (clockListeners.size === 0) {
+      stopSharedClock();
+      if (typeof document !== "undefined") {
+        document.removeEventListener(
+          "visibilitychange",
+          handleClockVisibilityChange,
+        );
+      }
+    }
+  };
+}
+
+function getClockSnapshot() {
+  return clockSnapshot;
+}
+
+function getServerClockSnapshot() {
+  return 0;
+}
 
 function mobileCopy(lang: Lang) {
   switch (lang) {
@@ -157,11 +229,11 @@ function useStableMapNodes(nodes: VPSNode[]): NodeDistributionMapNode[] {
   const ref = useRef<NodeDistributionMapNode[]>([]);
 
   return useMemo(() => {
-    const next = nodes.map(({ id, name, flag, online }) => ({
+    const next = nodes.map(({ id, name, flag, status }) => ({
       id,
       name,
       flag,
-      online,
+      status,
     }));
 
     const prev = ref.current;
@@ -173,7 +245,7 @@ function useStableMapNodes(nodes: VPSNode[]): NodeDistributionMapNode[] {
           node.id === other.id &&
           node.name === other.name &&
           node.flag === other.flag &&
-          node.online === other.online
+          node.status === other.status
         );
       });
 
@@ -237,55 +309,34 @@ function LocalClock({
   compact?: boolean;
   className?: string;
 }) {
-  const [localTime, setLocalTime] = useState<string>("");
-  const [timeZone, setTimeZone] = useState<string>("");
-
-  useEffect(() => {
-    let interval: number | undefined;
-    setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-
-    const updateTime = () => {
-      const now = new Date();
-      setLocalTime(
-        now.toLocaleString(undefined, {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: false,
-          ...(compact
-            ? {}
-            : {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-              }),
-        }),
-      );
-    };
-
-    const stopClock = () => {
-      if (interval !== undefined) {
-        window.clearInterval(interval);
-        interval = undefined;
-      }
-    };
-    const startClock = () => {
-      stopClock();
-      updateTime();
-      interval = window.setInterval(updateTime, 1000);
-    };
-    const onVisibilityChange = () => {
-      if (document.hidden) stopClock();
-      else startClock();
-    };
-
-    if (!document.hidden) startClock();
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      stopClock();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [compact]);
+  const now = useSyncExternalStore(
+    subscribeToClock,
+    getClockSnapshot,
+    getServerClockSnapshot,
+  );
+  const timeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    [],
+  );
+  const localTime = useMemo(
+    () =>
+      now
+        ? new Date(now).toLocaleString(undefined, {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+            hour12: false,
+            ...(compact
+              ? {}
+              : {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                }),
+          })
+        : "",
+    [compact, now],
+  );
 
   return (
     <div className={className}>
@@ -325,11 +376,9 @@ export function ConsoleHeader({
   view = "dashboard",
   showNodeMap = false,
 }: ConsoleHeaderProps) {
-  const [langOpen, setLangOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [residualOpen, setResidualOpen] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
-  const langMenuRef = useRef<HTMLDivElement>(null);
   const t = translations[lang];
   const tm = mobileCopy(lang);
   const { publicInfo } = usePublicInfo();
@@ -375,21 +424,8 @@ export function ConsoleHeader({
     dashboardBandwidthMetric,
   );
 
-  useEffect(() => {
-    if (!langOpen) return;
-    const onDocPointerDown = (e: PointerEvent) => {
-      if (
-        langMenuRef.current &&
-        !langMenuRef.current.contains(e.target as Node)
-      ) {
-        setLangOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", onDocPointerDown);
-    return () => document.removeEventListener("pointerdown", onDocPointerDown);
-  }, [langOpen]);
-
-  const totalOnline = overviewNodes.filter((n) => n.online).length;
+  const totalOnline = overviewNodes.filter((n) => n.status === "online").length;
+  const totalUnknown = overviewNodes.filter((n) => n.status === "unknown").length;
   const totalNodes = overviewNodes.length;
 
   const totalUsedIn = overviewNodes.reduce((sum, n) => sum + n.bandwidthUsedIn, 0);
@@ -415,7 +451,7 @@ export function ConsoleHeader({
   const avgMemoryPercent = totalMemory > 0 ? (totalMemoryUsed / totalMemory) * 100 : 0;
   const avgDiskPercent = totalDisk > 0 ? (totalDiskUsed / totalDisk) * 100 : 0;
 
-  const onlineNodes = overviewNodes.filter((n) => n.online);
+  const onlineNodes = overviewNodes.filter((n) => n.status === "online");
   const avgCpuUsage = onlineNodes.length
     ? onlineNodes.reduce((sum, n) => sum + n.cpuUsage, 0) / onlineNodes.length
     : 0;
@@ -429,8 +465,14 @@ export function ConsoleHeader({
   const mobileCpuLabel =
     dashboardCpuMetric === "Max" ? tm.cpuMax : tm.cpuAvg;
 
-  const totalRxSpeed = overviewNodes.reduce((sum, n) => sum + (n.online ? n.netSpeedIn : 0), 0);
-  const totalTxSpeed = overviewNodes.reduce((sum, n) => sum + (n.online ? n.netSpeedOut : 0), 0);
+  const totalRxSpeed = overviewNodes.reduce(
+    (sum, n) => sum + (n.status === "online" ? n.netSpeedIn : 0),
+    0,
+  );
+  const totalTxSpeed = overviewNodes.reduce(
+    (sum, n) => sum + (n.status === "online" ? n.netSpeedOut : 0),
+    0,
+  );
   const totalRealtimeSpeed = totalRxSpeed + totalTxSpeed; // in KB/s
   const maxRealtimeSpeed = onlineNodes.length
     ? Math.max(...onlineNodes.map((n) => n.netSpeedIn + n.netSpeedOut))
@@ -582,48 +624,30 @@ export function ConsoleHeader({
     return (
       <div className={rootClass}>
         <div className="flex items-center gap-2">
-          <div ref={langMenuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setLangOpen((open) => !open)}
-              className={`cursor-pointer transition-colors hover:text-zen-accent font-bold flex items-center gap-1 ${textPrimary}`}
-              aria-expanded={langOpen}
-              aria-haspopup="listbox"
+          <label
+            className={`relative inline-flex items-center ${zenTouch.btn} cursor-pointer font-bold ${textPrimary}`}
+          >
+            <span className="sr-only">Language / 语言</span>
+            <select
+              value={lang}
+              onChange={(event) =>
+                setLangPreference(event.target.value as Lang)
+              }
+              className="max-w-[10rem] cursor-pointer appearance-none bg-transparent pr-4 font-bold text-current outline-none"
             >
-              <span>{getLangMenuLabel(lang)}</span>
-              <span className={`${zenType.label} opacity-70`}>{langOpen ? "▴" : "▾"}</span>
-            </button>
-            {langOpen ? (
-              <div
-                role="listbox"
-                className={`absolute right-0 top-full mt-1.5 z-[100] min-w-[9.5rem] py-1 border shadow-lg rounded-sm bg-zen-surface ${zenBorder.muted}`}
-              >
-                {LANG_MENU_OPTIONS.map((opt) => {
-                  const selected = lang === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={() => {
-                        setLangPreference(opt.value);
-                        setLangOpen(false);
-                      }}
-                      className={`block w-full text-left px-3 py-1.5 cursor-pointer transition-colors hover:text-zen-accent ${
-                        selected
-                          ? `${textPrimary} font-extrabold`
-                          : `${zenText.subtle} font-bold`
-                      }`}
-                    >
-                      {opt.label[lang]}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
+              {LANG_MENU_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label[lang]}
+                </option>
+              ))}
+            </select>
+            <span
+              className={`${zenType.label} pointer-events-none absolute right-0 opacity-70`}
+              aria-hidden
+            >
+              ▾
+            </span>
+          </label>
 
           {!compact ? (
             <span className={`${zenText.faint} font-bold block select-none px-1`}>/</span>
@@ -632,8 +656,10 @@ export function ConsoleHeader({
 
         <div className={`flex items-center ${compact ? "gap-1.5 justify-end flex-wrap" : "gap-3"}`}>
           <button
+            type="button"
             onClick={() => setThemePreference("auto")}
-            className={`cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
+            aria-pressed={themePreference === "auto"}
+            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
               themePreference === "auto"
                 ? `${textPrimary} underline underline-offset-4`
                 : zenText.subtle
@@ -641,10 +667,12 @@ export function ConsoleHeader({
           >
             {t.themeAuto}
           </button>
-          <span className={zenText.faint}>·</span>
+          <span className={zenText.faint} aria-hidden>·</span>
           <button
+            type="button"
             onClick={() => setThemePreference("dark")}
-            className={`cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
+            aria-pressed={themePreference === "dark"}
+            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
               themePreference === "dark"
                 ? `${textPrimary} underline underline-offset-4`
                 : zenText.subtle
@@ -652,10 +680,12 @@ export function ConsoleHeader({
           >
             {t.themeDark}
           </button>
-          <span className={zenText.faint}>·</span>
+          <span className={zenText.faint} aria-hidden>·</span>
           <button
+            type="button"
             onClick={() => setThemePreference("light")}
-            className={`cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
+            aria-pressed={themePreference === "light"}
+            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
               themePreference === "light"
                 ? `${textPrimary} underline underline-offset-4`
                 : zenText.subtle
@@ -663,7 +693,7 @@ export function ConsoleHeader({
           >
             {t.themeLight}
           </button>
-          <span className={zenText.faint}>·</span>
+          <span className={zenText.faint} aria-hidden>·</span>
           {adminEntryLink(compact ? "p-0.5" : "p-1")}
         </div>
       </div>
@@ -685,9 +715,7 @@ export function ConsoleHeader({
           ) : null}
         </div>
 
-        <div
-          className={`md:hidden flex items-start justify-between gap-4 mt-3 ${langOpen ? "relative z-50" : ""}`}
-        >
+        <div className="md:hidden flex items-start justify-between gap-4 mt-3">
           <LocalClock
             label={t.localTime}
             loadingLabel={t.loading}
@@ -722,7 +750,7 @@ export function ConsoleHeader({
         />
 
         {/* Right: Modern Menu Controls (with localized Dark/Light options) */}
-        <div className={langOpen ? "relative z-50" : ""}>{settingsControls()}</div>
+        <div>{settingsControls()}</div>
         </div>
       </div>
 
@@ -739,7 +767,9 @@ export function ConsoleHeader({
                   value: String(totalOnline),
                   suffix: `/ ${totalNodes}`,
                   caption:
-                    totalNodes > 0 && totalOnline === totalNodes
+                    totalUnknown > 0
+                      ? `${t.statusUnknown}: ${totalUnknown}`
+                      : totalNodes > 0 && totalOnline === totalNodes
                       ? t.overviewAllOnline
                       : t.overviewOfflineCount(totalNodes - totalOnline),
                   icon: overviewIcons.nodeStatus,
@@ -992,7 +1022,16 @@ export function ConsoleHeader({
                 </button>
                 {mapExpanded ? (
                   <div id="mobile-node-map-panel" className="pt-2 pb-1 -mx-4">
-                    <Suspense fallback={null}>
+                    <Suspense
+                      fallback={
+                        <div
+                          className={`flex min-h-48 items-center justify-center ${zenType.caption} ${textMuted}`}
+                          role="status"
+                        >
+                          {t.loading}
+                        </div>
+                      }
+                    >
                       <NodeDistributionMap
                         nodes={mapNodes}
                         theme={theme}

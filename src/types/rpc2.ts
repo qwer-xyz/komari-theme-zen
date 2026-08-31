@@ -55,6 +55,9 @@ export interface RPC2ConnectionOptions {
 export interface RPC2CallOptions {
   timeout?: number;
   notification?: boolean;
+  signal?: AbortSignal;
+  /** Disable transparent WebSocket-to-HTTP retry for non-idempotent methods. */
+  allowHttpFallback?: boolean;
 }
 
 export interface RPC2EventListeners {

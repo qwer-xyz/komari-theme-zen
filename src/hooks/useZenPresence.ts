@@ -3,28 +3,33 @@
  * @license SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 export const ZEN_MOTION_MODAL_EXIT_MS = 280;
 
 export function useZenPresence(active: boolean, exitDurationMs = ZEN_MOTION_MODAL_EXIT_MS) {
+  const reducedMotion = useReducedMotion();
   const [mounted, setMounted] = useState(active);
   const [exiting, setExiting] = useState(false);
-  const wasActiveRef = useRef(active);
 
   useEffect(() => {
     if (active) {
-      wasActiveRef.current = true;
       setMounted(true);
       setExiting(false);
       return;
     }
 
-    if (!wasActiveRef.current) {
+    if (!mounted) {
+      setExiting(false);
       return;
     }
 
-    wasActiveRef.current = false;
+    if (reducedMotion) {
+      setMounted(false);
+      setExiting(false);
+      return;
+    }
     setExiting(true);
     const timer = window.setTimeout(() => {
       setMounted(false);
@@ -32,7 +37,7 @@ export function useZenPresence(active: boolean, exitDurationMs = ZEN_MOTION_MODA
     }, exitDurationMs);
 
     return () => clearTimeout(timer);
-  }, [active, exitDurationMs]);
+  }, [active, exitDurationMs, mounted, reducedMotion]);
 
   return { mounted, exiting };
 }

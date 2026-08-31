@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Lang, Messages } from "@/lib/i18n";
@@ -19,6 +19,7 @@ import {
 import { zenType, zenTouch } from "@/lib/typography";
 import { zenBorder, zenText } from "@/lib/zenSemantics";
 import { zenModalMotion, zenMotion } from "@/lib/zenMotion";
+import { useModalA11y } from "@/hooks/useModalA11y";
 
 interface ResidualValueModalProps {
   open: boolean;
@@ -92,20 +93,7 @@ export function ResidualValueModal({
   const requestClose = useCallback(() => {
     if (!exiting) onClose();
   }, [exiting, onClose]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") requestClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [mounted, requestClose]);
+  const dialogRef = useModalA11y(mounted, requestClose);
 
   if (!mounted) return null;
 
@@ -123,13 +111,14 @@ export function ResidualValueModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[210] flex items-center justify-center p-2 sm:p-6 lg:p-8">
-      <button
-        type="button"
-        className={`absolute inset-0 bg-zen-bg/80 backdrop-blur-sm cursor-default ${motion.backdrop}`}
-        aria-label={t.btnClose}
-        onClick={requestClose}
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 bg-zen-bg/90 cursor-default ${motion.backdrop}`}
+        onMouseDown={requestClose}
       />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="residual-value-dialog-title"
@@ -152,7 +141,7 @@ export function ResidualValueModal({
             type="button"
             aria-label={t.btnClose}
             onClick={requestClose}
-            className={`inline-flex shrink-0 items-center justify-center rounded-full border border-zen-border-muted p-1.5 sm:p-2 ${zenText.muted} hover:border-zen-accent/40 hover:text-zen-accent ${zenTouch.btn} ${zenMotion.pop} cursor-pointer`}
+            className={`zen-touch-target inline-flex shrink-0 items-center justify-center rounded-full border border-zen-border-muted p-1.5 sm:p-2 ${zenText.muted} hover:border-zen-accent/40 hover:text-zen-accent ${zenTouch.btn} ${zenMotion.pop} cursor-pointer`}
           >
             <X size={18} strokeWidth={2} />
           </button>

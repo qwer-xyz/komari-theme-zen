@@ -20,19 +20,21 @@ import type { LiveRecord } from "@/types/LiveData";
 import type { LoadRecord } from "@/types/records";
 import type { QueryMetricsResponse } from "@/types/metrics";
 import type { VPSNode } from "@/types";
+import { timestampMs } from "@/lib/numeric";
 import {
   canTryRpcMethod,
+  isRpcMethodUnsupported,
   noteRpcMethodFailure,
 } from "@/lib/rpcCapability";
+import {
+  fetchRecentRecords,
+  queryCommonRecords,
+} from "@/lib/recordQueries";
 
 const HISTORY_HOURS = 1;
-const POLL_MS = 60_000;
+const POLL_MS = 5 * 60_000;
 const CONCURRENCY = 3;
 const METRIC_METHOD = "public:queryMetrics";
-
-type RecentApiResponse = {
-  data?: LiveRecord[];
-};
 
 function extractLoadRecords(raw: unknown): LoadRecord[] {
   if (!raw || typeof raw !== "object") return [];
@@ -66,16 +68,13 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-async function fetchRecent(uuid: string): Promise<DashboardTrendSample[]> {
+async function fetchRecent(
+  uuid: string,
+): Promise<DashboardTrendSample[] | null> {
   try {
-    const response = await fetch(`/api/recent/${encodeURIComponent(uuid)}`);
-    if (!response.ok) return [];
-    const json = (await response.json()) as RecentApiResponse;
-    return recentRecordsToDashboardTrend(
-      Array.isArray(json.data) ? json.data : [],
-    );
+    return recentRecordsToDashboardTrend(await fetchRecentRecords(uuid));
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -84,21 +83,24 @@ async function fetchLoadRecords(
   uuid: string,
 ): Promise<LoadRecord[]> {
   try {
-    const result = await call<
-      { uuid: string; type: "load"; hours: number },
-      unknown
-    >("common:getRecords", { uuid, type: "load", hours: HISTORY_HOURS });
+    const result = await queryCommonRecords<unknown>(call, {
+      uuid,
+      type: "load",
+      hours: HISTORY_HOURS,
+    });
     return extractLoadRecords(result);
   } catch (rpcError) {
+    if (!isRpcMethodUnsupported(rpcError)) throw rpcError;
     try {
       const response = await fetch(
         `/api/records/load?uuid=${encodeURIComponent(uuid)}&hours=${HISTORY_HOURS}`,
+        { signal: AbortSignal.timeout(15_000) },
       );
       if (!response.ok) throw rpcError;
       const json = (await response.json()) as { data?: unknown };
       return extractLoadRecords(json.data);
     } catch {
-      return [];
+      throw rpcError;
     }
   }
 }
@@ -107,13 +109,17 @@ async function fetchNodeTrend(
   call: ReturnType<typeof useRPC2Call>["call"],
   uuid: string,
   recordEnabled: boolean,
-): Promise<[string, DashboardTrendSample[]]> {
+): Promise<[string, DashboardTrendSample[]] | null> {
+  let hasSuccessfulSource = false;
   if (recordEnabled) {
     const loadRecords = await fetchLoadRecords(call, uuid);
+    hasSuccessfulSource = true;
     const samples = loadRecordsToDashboardTrend(loadRecords);
     if (samples.length) return [uuid, samples];
   }
-  return [uuid, await fetchRecent(uuid)];
+  const recent = await fetchRecent(uuid);
+  if (recent) return [uuid, recent];
+  return hasSuccessfulSource ? [uuid, []] : null;
 }
 
 async function fetchMetricTrends(
@@ -132,7 +138,9 @@ async function fetchMetricTrends(
       fill_empty: true,
       max_points: 36,
     });
-    if (!Array.isArray(response?.series)) return null;
+    if (!Array.isArray(response?.series)) {
+      throw new Error("Invalid metrics response");
+    }
 
     const buckets = new Map<
       string,
@@ -142,8 +150,8 @@ async function fetchMetricTrends(
       if (!entityIdSet.has(series.entity_id)) continue;
       const entity = buckets.get(series.entity_id) ?? new Map();
       for (const point of series.points ?? []) {
-        const timestamp = new Date(point.time).getTime();
-        if (!Number.isFinite(timestamp)) continue;
+        const timestamp = timestampMs(point.time);
+        if (timestamp === null) continue;
         const bucket = entity.get(timestamp) ?? {};
         if (series.metric_key === "cpu.usage") bucket.cpu = point.value;
         if (series.metric_key === "net.in.rate") bucket.netIn = point.value;
@@ -176,8 +184,8 @@ async function fetchMetricTrends(
     }
     return histories;
   } catch (error) {
-    noteRpcMethodFailure(METRIC_METHOD, error);
-    return null;
+    if (noteRpcMethodFailure(METRIC_METHOD, error)) return null;
+    throw error;
   }
 }
 
@@ -190,16 +198,21 @@ export function useDashboardOverviewTrends(
   const { call } = useRPC2Call();
   const { recordEnabled } = useRecordSettings();
   const onlineNodeIds = nodes
-    .filter((node) => node.online)
+    .filter((node) => node.status === "online")
     .map((node) => node.id);
+  const hasUnknownNodes = nodes.some((node) => node.status === "unknown");
   const nodeKey = onlineNodeIds.join(",");
   const [histories, setHistories] = useState<
     Map<string, DashboardTrendSample[]>
   >(new Map());
 
   useEffect(() => {
-    if (!enabled || onlineNodeIds.length === 0) {
+    if (!enabled) {
       setHistories(new Map());
+      return;
+    }
+    if (onlineNodeIds.length === 0) {
+      if (!hasUnknownNodes) setHistories(new Map());
       return;
     }
 
@@ -227,8 +240,29 @@ export function useDashboardOverviewTrends(
             CONCURRENCY,
             (uuid) => fetchNodeTrend(call, uuid, recordEnabled),
           );
-          if (!cancelled) setHistories(new Map(entries));
+          if (!cancelled) {
+            const fetched = new Map(
+              entries.filter(
+                (entry): entry is [string, DashboardTrendSample[]] =>
+                  entry !== null,
+              ),
+            );
+            setHistories((previous) => {
+              const next = new Map<string, DashboardTrendSample[]>();
+              for (const uuid of onlineNodeIds) {
+                if (fetched.has(uuid)) {
+                  next.set(uuid, fetched.get(uuid) ?? []);
+                } else if (previous.has(uuid)) {
+                  next.set(uuid, previous.get(uuid) ?? []);
+                }
+              }
+              return next;
+            });
+          }
         }
+      } catch {
+        // Preserve prior trend lines; a transport/auth failure should not fan
+        // out into one fallback request per node.
       } finally {
         running = false;
         scheduleNext();
@@ -248,16 +282,18 @@ export function useDashboardOverviewTrends(
       if (timer) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [enabled, nodeKey, recordEnabled, call]);
+  }, [enabled, nodeKey, hasUnknownNodes, recordEnabled, call]);
 
   return useMemo(() => {
     if (!enabled) return { cpu: [], bandwidth: [] };
     const now = Date.now();
     const current = new Map<string, DashboardTrendSample>();
     for (const node of nodes) {
-      if (!node.online) continue;
+      if (node.status !== "online") continue;
+      const sampleTime = timestampMs(node.updatedAt);
+      if (sampleTime === null) continue;
       current.set(node.id, {
-        t: now,
+        t: sampleTime,
         cpu: Number.isFinite(node.cpuUsage) ? Math.max(0, node.cpuUsage) : null,
         bandwidth:
           Number.isFinite(node.netSpeedIn) && Number.isFinite(node.netSpeedOut)

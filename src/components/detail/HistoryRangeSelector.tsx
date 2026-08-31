@@ -61,6 +61,7 @@ export function HistoryRangeSelector({
   return (
     <div className="max-w-full overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <ZenTabControl
+        ariaLabel={messages.historyRange}
         tabs={tabs}
         value={activeId}
         onChange={(id) => {

@@ -27,14 +27,17 @@ export function MetricPercentBar({
   fillClassName,
   textPrimaryClass,
 }: MetricPercentBarProps) {
+  const normalizedPercent = Number.isFinite(percent)
+    ? Math.max(0, Math.min(100, percent))
+    : 0;
   const filled = Math.round(
-    (Math.max(0, Math.min(100, percent)) / 100) * METRIC_BAR_SEGMENTS,
+    (normalizedPercent / 100) * METRIC_BAR_SEGMENTS,
   );
 
   return (
     <span className={`${metricWidgetGridClass} ${textPrimaryClass}`}>
       <span className={`text-right font-bold tabular-nums ${valueClassName}`}>
-        {percent.toFixed(1)}%
+        {normalizedPercent.toFixed(1)}%
       </span>
       <MetricBarTrack filled={filled} fillClassName={fillClassName} />
     </span>
@@ -59,7 +62,6 @@ export function MetricBarTrack({
     return (
       <span
         className="inline-flex h-2.5 w-full items-stretch border-x border-zen-fg-faint/35 px-[2px] box-border"
-        aria-hidden
       >
         {children}
       </span>

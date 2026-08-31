@@ -15,7 +15,7 @@ import { useNodeRecent } from "@/hooks/useNodeRecent";
 import { useRecordSettings } from "@/hooks/useRecordSettings";
 import { useThemeSettings } from "@/hooks/useThemeSettings";
 import {
-  buildMetricHistory,
+  buildAllMetricHistories,
   formatLoadAverage,
   loadTotalsFromNode,
   normalizeLoadSeries,
@@ -50,6 +50,8 @@ import { NodeTags } from "@/components/NodeTags";
 import { parseNodeTags } from "@/lib/parseNodeTags";
 import { useChartScrub } from "@/hooks/useChartScrub";
 import { useLiveSeries } from "@/hooks/useLiveSeries";
+import { useLiveData } from "@/contexts/LiveDataContext";
+import { safePercent } from "@/lib/numeric";
 import { zenType, zenTouch } from "@/lib/typography";
 import { zenBorder, zenFill, zenPopover, zenText } from "@/lib/zenSemantics";
 import { zenMotion } from "@/lib/zenMotion";
@@ -144,14 +146,14 @@ function useContentReveal(loading: boolean) {
 }
 
 function contentPanelMotion(busy: boolean, revealing: boolean) {
-  const base = "transition-[opacity,filter] duration-500 ease-out";
+  const base = "transition-opacity duration-300 ease-out";
   if (busy) {
-    return `${base} opacity-40 blur-[1.5px] pointer-events-none select-none`;
+    return `${base} opacity-40 pointer-events-none select-none`;
   }
   if (revealing) {
     return `${base} ${zenMotion.contentReveal}`;
   }
-  return `${base} opacity-100 blur-0`;
+  return `${base} opacity-100`;
 }
 
 type ChartPt = { x: number; y: number; val: number };
@@ -455,9 +457,15 @@ const MiniLineChart = ({
           )}
           {!isHovering && (
             <>
-              <span style={{ color }}>● {formatDisplay(displayVal1)}</span>
+              <span className="text-zen-fg-strong">
+                <span style={{ color }} aria-hidden>●</span>{" "}
+                {formatDisplay(displayVal1)}
+              </span>
               {displayVal2 !== null && (
-                <span style={{ color: color2 }}>● {formatDisplay(displayVal2)}</span>
+                <span className="text-zen-fg-strong">
+                  <span style={{ color: color2 }} aria-hidden>●</span>{" "}
+                  {formatDisplay(displayVal2)}
+                </span>
               )}
             </>
           )}
@@ -635,7 +643,9 @@ const MiniLineChart = ({
                 <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: color }}></span>
                 <span>{label1}:</span>
               </span>
-              <span className="font-bold" style={{ color }}>{formatDisplay(displayVal1)}</span>
+              <span className="font-bold text-zen-fg-strong">
+                {formatDisplay(displayVal1)}
+              </span>
             </div>
             {displayVal2 !== null && (
               <div className="flex items-center gap-4 whitespace-nowrap justify-between">
@@ -643,7 +653,9 @@ const MiniLineChart = ({
                   <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: color2 }}></span>
                   <span>{label2 || "VALUE 2"}:</span>
                 </span>
-                <span className="font-bold" style={{ color: color2 }}>{formatDisplay(displayVal2)}</span>
+                <span className="font-bold text-zen-fg-strong">
+                  {formatDisplay(displayVal2)}
+                </span>
               </div>
             )}
             {extraLayers.map((layer, layerIdx) => {
@@ -664,7 +676,7 @@ const MiniLineChart = ({
                     />
                     <span>{layer.label}:</span>
                   </span>
-                  <span className="font-bold" style={{ color: layer.color }}>
+                  <span className="font-bold text-zen-fg-strong">
                     {shown}
                   </span>
                 </div>
@@ -741,6 +753,7 @@ export function NodeDetail({
 }: NodeDetailProps) {
   const t = translations[lang];
   const { recordEnabled, loadPresets, pingPresets } = useRecordSettings();
+  const { status: liveDataStatus } = useLiveData();
   const { pingTaskIds } = useThemeSettings();
 
   const [selectedLoadHours, setSelectedLoadHours] = React.useState(
@@ -753,14 +766,20 @@ export function NodeDetail({
   const [subSection, setSubSection] = React.useState<"metrics" | "latency">(
     "metrics",
   );
+  const [liveMode, setLiveMode] = React.useState(true);
   const { records: recentRecords } = useNodeRecent(
     node.id,
-    node.online && subSection === "metrics",
+    node.online && subSection === "metrics" && !liveMode,
   );
-  const [liveMode, setLiveMode] = React.useState(true);
   const [selectedProbes, setSelectedProbes] = React.useState<string[]>([]);
 
-  const liveSamples = useLiveSeries(node, recordEnabled && node.online);
+  const liveSamples = useLiveSeries(
+    node,
+    node.status === "online" &&
+      liveDataStatus === "fresh" &&
+      subSection === "metrics" &&
+      liveMode,
+  );
 
   React.useEffect(() => {
     if (loadPresets.length === 0) return;
@@ -776,7 +795,16 @@ export function NodeDetail({
     }
   }, [pingPresets, selectedPingHours]);
 
-  const loadHours = recordEnabled && node.online ? selectedLoadHours : 0;
+  React.useEffect(() => {
+    if (!recordEnabled && subSection === "latency") {
+      setSubSection("metrics");
+    }
+  }, [recordEnabled, subSection]);
+
+  const loadHours =
+    recordEnabled && node.online && subSection === "metrics" && !liveMode
+      ? selectedLoadHours
+      : 0;
   const {
     records: loadRecords,
     gpuDevices,
@@ -841,8 +869,12 @@ export function NodeDetail({
     );
   };
 
-  const memPercent = node.online ? (node.memoryUsed / node.memoryTotal) * 100 : 0;
-  const diskPercent = node.online ? (node.diskUsed / node.diskTotal) * 100 : 0;
+  const memPercent = node.online
+    ? safePercent(node.memoryUsed, node.memoryTotal)
+    : 0;
+  const diskPercent = node.online
+    ? safePercent(node.diskUsed, node.diskTotal)
+    : 0;
 
   // Design accent variables
   const textPrimary = zenText.primary;
@@ -871,29 +903,24 @@ export function NodeDetail({
   const loadTotals = React.useMemo(() => loadTotalsFromNode(node), [node]);
 
   const metricHistory = React.useMemo(() => {
-    const buildHistory = (
-      metric: Parameters<typeof buildMetricHistory>[0],
-    ) =>
-      buildMetricHistory(
-        metric,
-        selectedLoadHours,
-        loadTotals,
-        loadRecords,
-        recentRecords,
-      );
-
+    const histories = buildAllMetricHistories(
+      selectedLoadHours,
+      loadTotals,
+      loadRecords,
+      recentRecords,
+    );
     return {
-      cpu: buildHistory("cpu"),
-      load: buildHistory("load1"),
-      mem: buildHistory("mem"),
-      swap: buildHistory("swap"),
-      disk: buildHistory("disk"),
-      netIn: buildHistory("netin"),
-      netOut: buildHistory("netout"),
-      tcp: buildHistory("tcp"),
-      udp: buildHistory("udp"),
-      proc: buildHistory("processes"),
-      temp: buildHistory("temp"),
+      cpu: histories.cpu,
+      load: histories.load1,
+      mem: histories.mem,
+      swap: histories.swap,
+      disk: histories.disk,
+      netIn: histories.netin,
+      netOut: histories.netout,
+      tcp: histories.tcp,
+      udp: histories.udp,
+      proc: histories.processes,
+      temp: histories.temp,
     };
   }, [selectedLoadHours, loadTotals, loadRecords, recentRecords]);
 
@@ -1016,6 +1043,8 @@ export function NodeDetail({
         color: ZEN_CHART.load,
         label: t.lblLoad1m,
         formatValue: formatLoadChartValue,
+        strokeDasharray: "5 3",
+        strokeWidth: 1.4,
       },
     ],
     [live.load, loadHist.values, t.lblLoad1m, formatLoadChartValue],
@@ -1118,7 +1147,7 @@ export function NodeDetail({
   }, [node.name]);
 
   return (
-    <div className={`km-instance-detail font-sans ${zenType.body} select-none space-y-5 md:space-y-6 pt-1 pb-4`}>
+    <div className={`km-instance-detail font-sans ${zenType.body} space-y-5 md:space-y-6 pt-1 pb-4`}>
       {/* Title block — back inline with node name */}
       <DetailSection delay={0} className="space-y-3 md:space-y-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-x-10 lg:gap-x-14">
@@ -1147,7 +1176,7 @@ export function NodeDetail({
                   {t.backToList}
                 </button>
               ) : null}
-              <Flag flag={node.flag} className="h-6 w-6 shrink-0" aria-hidden="true" />
+              <Flag flag={node.flag} className="h-6 w-6 shrink-0" />
               <span data-title-slot className="min-w-0 flex-1" aria-hidden="true">
                 <span className={titleLineClass}>{titleFirstLine}</span>
               </span>
@@ -1445,24 +1474,34 @@ export function NodeDetail({
           </div>
 
           {/* [05] UNIFIED DYNAMIC HARDWARE TIMESERIES & SYSTEM PROCESS TELEMETRY / LATENCY MONITORING */}
-          {recordEnabled && (
+          {(recordEnabled || node.online) && (
           <DetailSection delay={200} className="space-y-4 pt-6">
             <DetailPanel>
             <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-h-10 min-w-0 flex-1 items-center">
                 <div className="max-w-full min-w-0 overflow-x-auto rounded-full bg-zen-fill-muted/20 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   <ZenTabControl
+                    ariaLabel={t.detailedReport}
                     tabs={[
                       {
                         id: "metrics",
                         label: t.tabMetrics,
                         leading: <Gauge className="h-3.5 w-3.5" aria-hidden="true" />,
                       },
-                      {
-                        id: "latency",
-                        label: t.tabLatency,
-                        leading: <RadioTower className="h-3.5 w-3.5" aria-hidden="true" />,
-                      },
+                      ...(recordEnabled
+                        ? [
+                            {
+                              id: "latency",
+                              label: t.tabLatency,
+                              leading: (
+                                <RadioTower
+                                  className="h-3.5 w-3.5"
+                                  aria-hidden="true"
+                                />
+                              ),
+                            },
+                          ]
+                        : []),
                     ]}
                     value={subSection}
                     onChange={(id) =>

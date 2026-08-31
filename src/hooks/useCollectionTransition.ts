@@ -14,7 +14,14 @@ export function useCollectionTransition<T>(items: T[], transitionKey: string) {
   latestItemsRef.current = items;
 
   useLayoutEffect(() => {
-    if (committedKeyRef.current === transitionKey) return;
+    if (committedKeyRef.current === transitionKey) {
+      // A rapid A → B → A change can cancel B's swap timer while the
+      // collection is still in its leaving phase. Restore the committed
+      // collection immediately instead of leaving it transparent forever.
+      setDisplayedItems(latestItemsRef.current);
+      setPhase("idle");
+      return;
+    }
 
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -42,11 +49,6 @@ export function useCollectionTransition<T>(items: T[], transitionKey: string) {
     return () => window.clearTimeout(settleTimer);
   }, [phase]);
 
-  useEffect(() => {
-    if (phase !== "idle" || committedKeyRef.current !== transitionKey) return;
-    setDisplayedItems(items);
-  }, [items, phase, transitionKey]);
-
   const className =
     phase === "leaving"
       ? "zen-node-collection-leave"
@@ -54,5 +56,14 @@ export function useCollectionTransition<T>(items: T[], transitionKey: string) {
         ? "zen-node-collection-enter"
         : "";
 
-  return { displayedItems, className, transitioning: phase !== "idle" };
+  const visibleItems =
+    phase === "idle" && committedKeyRef.current === transitionKey
+      ? items
+      : displayedItems;
+
+  return {
+    displayedItems: visibleItems,
+    className,
+    transitioning: phase !== "idle",
+  };
 }

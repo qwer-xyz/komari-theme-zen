@@ -158,8 +158,9 @@ function TagOverflow({
   startIndex: number;
   spaced?: boolean;
 }) {
-  const triggerRef = React.useRef<HTMLSpanElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const panelId = React.useId();
   const [open, setOpen] = React.useState(false);
   const [coords, setCoords] = React.useState({ top: 0, left: 0 });
   const [visible, setVisible] = React.useState(false);
@@ -193,19 +194,55 @@ function TagOverflow({
     };
   }, [open, reposition]);
 
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (
+        !triggerRef.current?.contains(target) &&
+        !panelRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
+
   const showPanel = () => setOpen(true);
   const hidePanel = () => setOpen(false);
 
   return (
     <>
-      <span
+      <button
+        type="button"
         ref={triggerRef}
-        className="inline-flex shrink-0 items-center"
-        onClick={(e) => e.stopPropagation()}
-        onMouseEnter={showPanel}
-        onMouseLeave={hidePanel}
-        onFocus={showPanel}
-        onBlur={hidePanel}
+        className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center bg-transparent"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-describedby={open ? panelId : undefined}
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen((value) => !value);
+        }}
+        onPointerEnter={(event) => {
+          if (event.pointerType === "mouse") showPanel();
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === "mouse") hidePanel();
+        }}
+        onBlur={() => hidePanel()}
       >
         <TagSeparator theme={theme} spaced={spaced} />
         <span
@@ -213,17 +250,18 @@ function TagOverflow({
         >
           +{hiddenCount}
         </span>
-      </span>
+      </button>
       {open &&
         createPortal(
           <div
+            id={panelId}
             ref={panelRef}
             role="tooltip"
             style={{
               position: "fixed",
               top: coords.top,
               left: coords.left,
-              zIndex: 9999,
+              zIndex: 190,
             }}
             className={`inline-flex max-w-[min(320px,calc(100vw-16px))] flex-wrap items-center gap-x-1 rounded-sm px-2 py-1 font-mono ${panelClass} ${zenMotion.popover} ${visible ? `${zenMotion.popoverVisible} pointer-events-auto` : "pointer-events-none"}`}
             onMouseEnter={showPanel}
@@ -268,7 +306,6 @@ export const NodeTags = React.memo(
         className={`flex min-w-0 flex-row flex-wrap items-center ${
           spaced ? "gap-x-3 gap-y-1" : "gap-x-1 gap-y-0"
         } ${className}`.trim()}
-        onClick={(e) => e.stopPropagation()}
       >
         <TagList
           items={visible}

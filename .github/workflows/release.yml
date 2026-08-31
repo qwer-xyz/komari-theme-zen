@@ -27,6 +27,9 @@ jobs:
       - name: Type check
         run: npm run lint
 
+      - name: Test core data paths
+        run: npm test
+
       - name: Build and pack theme
         run: npm run pack
 

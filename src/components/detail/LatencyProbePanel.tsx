@@ -358,6 +358,7 @@ export function LatencyProbePanel({
             <button
               type="button"
               onClick={() => setPeakClipping(!peakClipping)}
+              aria-pressed={peakClipping}
               className={`${zenTouch.btn} transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
                 peakClipping
                   ? "text-zen-accent font-extrabold"
@@ -372,6 +373,7 @@ export function LatencyProbePanel({
             <button
               type="button"
               onClick={() => setConnectBreakpoints(!connectBreakpoints)}
+              aria-pressed={connectBreakpoints}
               className={`${zenTouch.btn} transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
                 connectBreakpoints
                   ? "text-zen-accent font-extrabold"
@@ -398,7 +400,7 @@ export function LatencyProbePanel({
               onTouchStart={isLoading ? undefined : onTouchStart}
               onTouchMove={isLoading ? undefined : onTouchMove}
               onTouchEnd={isLoading ? undefined : onTouchEnd}
-              className={`relative overflow-visible touch-none ${isLoading ? "pointer-events-none" : "cursor-crosshair"}`}
+              className={`relative overflow-visible touch-pan-y ${isLoading ? "pointer-events-none" : "cursor-crosshair"}`}
             >
               <svg
                 data-chart-main
@@ -595,10 +597,7 @@ export function LatencyProbePanel({
                         >
                           {task.name}
                         </span>
-                        <span
-                          className="shrink-0 font-bold tabular-nums"
-                          style={{ color }}
-                        >
+                        <span className="shrink-0 font-bold tabular-nums text-zen-fg-strong">
                           {formatProbeMs(val)}
                         </span>
                       </div>
@@ -644,6 +643,7 @@ export function LatencyProbePanel({
               onResetZoom={resetZoom}
               theme={theme}
               ariaLabel={t.pingOverviewAria}
+              keyboardHelp={t.pingOverviewKeyboardHelp}
             />
 
             <div className="space-y-2 pt-1 select-none">
@@ -675,6 +675,7 @@ export function LatencyProbePanel({
                       key={id}
                       type="button"
                       onClick={() => onToggleProbe(id)}
+                      aria-pressed={isSelected}
                       title={`${task.name} — ${metricsTitle}`}
                       className={`flex items-center gap-1.5 min-w-0 w-full ${zenTouch.btn} transition-all duration-200 cursor-pointer rounded-md ${
                         isSelected
@@ -702,7 +703,7 @@ export function LatencyProbePanel({
                           isSelected ? "font-extrabold" : isChartActive ? "font-bold" : ""
                         }`}
                       >
-                        <span style={{ color: isChartActive ? color : undefined }}>
+                        <span>
                           {avg >= 100 ? avg.toFixed(0) : avg.toFixed(1)}ms
                         </span>
                         <span

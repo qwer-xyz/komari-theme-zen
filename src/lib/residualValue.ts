@@ -55,7 +55,8 @@ export type ResidualValueSummary = {
 };
 
 const CACHE_VERSION = "v1";
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+export const RESIDUAL_RATE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_STALE_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 const FIAT_CODES = new Set([
   "AED",
@@ -618,17 +619,23 @@ function cacheKey(base: string) {
   return `komari-zen-residual-rates-${CACHE_VERSION}-${base}`;
 }
 
-function readCachedRates(base: string): ResidualExchangeRates | null {
+function readCachedRates(
+  base: string,
+  allowExpired = false,
+): ResidualExchangeRates | null {
   try {
     const raw = window.localStorage.getItem(cacheKey(base));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ResidualExchangeRates;
+    const age = Date.now() - parsed.fetchedAt;
     if (
       parsed?.base !== base ||
       !parsed.rates ||
       typeof parsed.rates !== "object" ||
       !parsed.fetchedAt ||
-      Date.now() - parsed.fetchedAt > CACHE_TTL_MS
+      age < 0 ||
+      age > MAX_STALE_CACHE_AGE_MS ||
+      (!allowExpired && age > RESIDUAL_RATE_CACHE_TTL_MS)
     ) {
       return null;
     }
@@ -636,6 +643,12 @@ function readCachedRates(base: string): ResidualExchangeRates | null {
   } catch {
     return null;
   }
+}
+
+const inflightRateRequests = new Map<string, Promise<ResidualExchangeRates>>();
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  return fetch(url, { signal: AbortSignal.timeout(8_000) });
 }
 
 function writeCachedRates(data: ResidualExchangeRates) {
@@ -658,7 +671,7 @@ function hasRequiredRates(
 }
 
 async function fetchFrankfurterRates(base: string): Promise<ResidualExchangeRates> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://api.frankfurter.dev/v2/rates?base=${encodeURIComponent(base)}`,
   );
   if (!response.ok) throw new Error(`Frankfurter ${response.status}`);
@@ -690,7 +703,7 @@ async function fetchFrankfurterRates(base: string): Promise<ResidualExchangeRate
 }
 
 async function fetchExchangeRateApiRates(base: string): Promise<ResidualExchangeRates> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://open.er-api.com/v6/latest/${encodeURIComponent(base)}`,
   );
   if (!response.ok) throw new Error(`ExchangeRate-API ${response.status}`);
@@ -717,25 +730,50 @@ export async function loadResidualExchangeRates(
   requiredCurrencies: readonly string[] = [],
 ): Promise<ResidualExchangeRates> {
   const base = normalizePrimaryCurrency(baseCurrency);
+  const requestKey = `${base}:${[...requiredCurrencies].sort().join(",")}`;
+  const existing = inflightRateRequests.get(requestKey);
+  if (existing) return existing;
+
   const cached = readCachedRates(base);
   if (cached && hasRequiredRates(cached, requiredCurrencies)) return cached;
+  const stale = readCachedRates(base, true);
 
-  let rates: ResidualExchangeRates | null = null;
-  try {
-    rates = await fetchFrankfurterRates(base);
-    if (!hasRequiredRates(rates, requiredCurrencies)) {
-      rates = await fetchExchangeRateApiRates(base);
+  const request = (async () => {
+    let firstError: unknown;
+    try {
+      const rates = await fetchFrankfurterRates(base);
+      if (hasRequiredRates(rates, requiredCurrencies)) {
+        writeCachedRates(rates);
+        return rates;
+      }
+    } catch (error) {
+      firstError = error;
     }
-  } catch {
-    // Fall through to the secondary open exchange-rate endpoint.
-  }
 
-  if (!rates) {
-    rates = await fetchExchangeRateApiRates(base);
-  }
-
-  writeCachedRates(rates);
-  return rates;
+    try {
+      const rates = await fetchExchangeRateApiRates(base);
+      if (!hasRequiredRates(rates, requiredCurrencies)) {
+        throw new Error("Exchange-rate response is missing required currencies");
+      }
+      writeCachedRates(rates);
+      return rates;
+    } catch (error) {
+      if (stale && hasRequiredRates(stale, requiredCurrencies)) {
+        return { ...stale, fromCache: true };
+      }
+      throw error instanceof Error
+        ? error
+        : firstError instanceof Error
+          ? firstError
+          : new Error("Failed to load exchange rates");
+    }
+  })().finally(() => {
+    if (inflightRateRequests.get(requestKey) === request) {
+      inflightRateRequests.delete(requestKey);
+    }
+  });
+  inflightRateRequests.set(requestKey, request);
+  return request;
 }
 
 export function formatResidualCurrency(

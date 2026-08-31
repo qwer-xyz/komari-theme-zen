@@ -21,7 +21,7 @@ export type PingSummaryEntry = {
 
 /** Card latency: short window + periodic refresh (not full 1h history). */
 const CONCURRENCY = 3;
-const POLL_MS = 45_000;
+const POLL_MS = 2 * 60_000;
 const WINDOW_MS = 5 * 60 * 1000;
 /** Trim unused `records` payload; card only reads `tasks`. */
 const MAX_COUNT = 1;
@@ -89,7 +89,7 @@ async function fetchPingSummaries(
         return buildMetricSummaryMap(nodeUuids, response.stats);
       }
     } catch (error) {
-      noteRpcMethodFailure(METRIC_METHOD, error);
+      if (!noteRpcMethodFailure(METRIC_METHOD, error)) throw error;
     }
   }
 
@@ -108,13 +108,15 @@ async function fetchPingSummaries(
         );
         return [uuid, buildSummaryEntry(tasks)] as const;
       } catch {
-        return [uuid, buildSummaryEntry([])] as const;
+        return null;
       }
     },
   );
 
   const map = new Map<string, PingSummaryEntry>();
-  for (const [uuid, entry] of entries) {
+  for (const result of entries) {
+    if (!result) continue;
+    const [uuid, entry] = result;
     map.set(uuid, entry);
   }
   return map;
@@ -213,7 +215,19 @@ export function usePingSummary(nodeUuids: string[], taskIds: number[] = []) {
       try {
         const map = await fetchPingSummaries(call, nodeUuids, taskIds);
         if (cancelled) return;
-        setSummary(map);
+        setSummary((previous) => {
+          const next = new Map<string, PingSummaryEntry>();
+          for (const uuid of nodeUuids) {
+            if (map.has(uuid)) {
+              next.set(uuid, map.get(uuid) ?? buildSummaryEntry([]));
+            } else if (previous.has(uuid)) {
+              next.set(uuid, previous.get(uuid) ?? buildSummaryEntry([]));
+            }
+          }
+          return next;
+        });
+      } catch {
+        // Keep the last successful per-node summary and retry on the next poll.
       } finally {
         running = false;
         if (!cancelled && initial) setIsLoading(false);

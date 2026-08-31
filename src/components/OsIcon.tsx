@@ -14,7 +14,10 @@ interface OsIconProps {
 export const OsIcon = React.memo(({ os, className = "w-3.5 h-3.5 min-w-[14px]" }: OsIconProps) => (
   <img
     src={getOSImage(os)}
-    alt={os}
+    alt=""
+    aria-hidden="true"
+    loading="lazy"
+    decoding="async"
     className={`shrink-0 object-contain ${className}`}
   />
 ));

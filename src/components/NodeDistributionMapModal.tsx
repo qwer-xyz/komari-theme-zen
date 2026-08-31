@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import React, { Suspense, lazy, useCallback, useEffect } from "react";
+import React, { Suspense, lazy, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import type { Lang } from "@/lib/i18n";
@@ -13,6 +13,7 @@ import { zenBorder, zenText } from "@/lib/zenSemantics";
 import { useZenPresence, ZEN_MOTION_MODAL_EXIT_MS } from "@/hooks/useZenPresence";
 import { zenModalMotion, zenMotion } from "@/lib/zenMotion";
 import type { NodeDistributionMapNode } from "@/components/NodeDistributionMap";
+import { useModalA11y } from "@/hooks/useModalA11y";
 
 const NodeDistributionMap = lazy(() =>
   import("@/components/NodeDistributionMap").then((m) => ({
@@ -42,32 +43,20 @@ export function NodeDistributionMapModal({
   const requestClose = useCallback(() => {
     if (!exiting) onClose();
   }, [exiting, onClose]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") requestClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [mounted, requestClose]);
+  const dialogRef = useModalA11y(mounted, requestClose);
 
   if (!mounted) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 lg:p-8 xl:p-10">
-      <button
-        type="button"
-        className={`absolute inset-0 bg-zen-bg/80 backdrop-blur-sm cursor-default ${motion.backdrop}`}
-        aria-label={t.btnClose}
-        onClick={requestClose}
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 bg-zen-bg/90 cursor-default ${motion.backdrop}`}
+        onMouseDown={requestClose}
       />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="node-map-dialog-title"
@@ -85,13 +74,22 @@ export function NodeDistributionMapModal({
             type="button"
             aria-label={t.btnClose}
             onClick={requestClose}
-            className={`inline-flex shrink-0 items-center justify-center rounded-full border border-zen-border-muted p-2 ${zenText.muted} hover:border-zen-accent/40 hover:text-zen-accent ${zenTouch.btn} ${zenMotion.pop} cursor-pointer`}
+            className={`zen-touch-target inline-flex shrink-0 items-center justify-center rounded-full border border-zen-border-muted p-2 ${zenText.muted} hover:border-zen-accent/40 hover:text-zen-accent ${zenTouch.btn} ${zenMotion.pop} cursor-pointer`}
           >
             <X size={18} strokeWidth={2} />
           </button>
         </div>
         <div className={`min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-6 xl:px-8 xl:py-7 ${zenMotion.fadeInUpDelayed}`}>
-          <Suspense fallback={null}>
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className="flex min-h-[24rem] items-center justify-center font-mono text-zen-fg-muted"
+              >
+                {t.loadingData}
+              </div>
+            }
+          >
             <NodeDistributionMap
               nodes={nodes}
               theme={theme}

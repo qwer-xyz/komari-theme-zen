@@ -1,7 +1,7 @@
 {
   "name": "komari-theme-zen",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -10,7 +10,9 @@
     "pack": "npm run build && node scripts/pack-theme.mjs",
     "preview": "vite preview",
     "clean": "node scripts/clean.mjs",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

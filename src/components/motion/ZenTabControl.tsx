@@ -29,6 +29,8 @@ type ZenTabControlProps = {
   scrollable?: boolean;
   /** Sliding underline or pill highlight. Off for section-title style tabs. */
   showIndicator?: boolean;
+  /** Accessible name for this mutually exclusive choice group. */
+  ariaLabel?: string;
 };
 
 export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
@@ -46,6 +48,7 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
       separator,
       scrollable = false,
       showIndicator = true,
+      ariaLabel,
     },
     forwardedRef,
   ) {
@@ -66,14 +69,16 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
         style={
           variant === "pill"
             ? {
-                left: rect.left,
-                top: rect.top,
+                left: 0,
+                top: 0,
                 width: rect.width,
                 height: rect.height,
+                transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
               }
             : {
-                left: rect.left,
+                left: 0,
                 width: rect.width,
+                transform: `translate3d(${rect.left}px, 0, 0)`,
               }
         }
       />
@@ -86,6 +91,8 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
   const row = (
     <div
       ref={rootRef}
+      role="group"
+      aria-label={ariaLabel}
       className={`relative flex items-center ${scrollable ? "w-max gap-2 py-0.5 pr-3" : "gap-2"} ${className}`}
     >
       {indicator}
@@ -100,6 +107,7 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
             type="button"
             ref={register(tab.id)}
             disabled={tab.disabled}
+            aria-pressed={tab.id === value}
             data-group-active={
               scrollable && tab.id === value ? "true" : undefined
             }

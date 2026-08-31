@@ -1,6 +1,7 @@
 import { formatNodeBilling, type BillingLabels } from "@/lib/billingDisplay";
 import { resolveTrafficUsedGb } from "@/lib/formatUnits";
 import type { VPSNode } from "@/types";
+import { safePercent } from "@/lib/numeric";
 
 export type NodeSortField =
   | "default"
@@ -66,12 +67,12 @@ export function sortNodeList(
         valB = b.online ? b.cpuUsage : -1;
         break;
       case "mem":
-        valA = a.online ? a.memoryUsed / a.memoryTotal : -1;
-        valB = b.online ? b.memoryUsed / b.memoryTotal : -1;
+        valA = a.online ? safePercent(a.memoryUsed, a.memoryTotal) : -1;
+        valB = b.online ? safePercent(b.memoryUsed, b.memoryTotal) : -1;
         break;
       case "disk":
-        valA = a.online ? a.diskUsed / a.diskTotal : -1;
-        valB = b.online ? b.diskUsed / b.diskTotal : -1;
+        valA = a.online ? safePercent(a.diskUsed, a.diskTotal) : -1;
+        valB = b.online ? safePercent(b.diskUsed, b.diskTotal) : -1;
         break;
       case "bandwidth":
         valA = a.online ? a.netSpeedIn + a.netSpeedOut : -1;

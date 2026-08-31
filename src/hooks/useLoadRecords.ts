@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRPC2Call } from "@/contexts/RPC2Context";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import type {
@@ -8,23 +8,33 @@ import type {
 } from "@/types/records";
 import {
   canTryRpcMethod,
+  isRpcMethodUnsupported,
   noteRpcMethodFailure,
 } from "@/lib/rpcCapability";
+import { queryCommonRecords } from "@/lib/recordQueries";
+import { timestampMs } from "@/lib/numeric";
 
 const PUBLIC_RECORDS_METHOD = "public:getRecordsByUUID";
 
+function sortedRecordsByTime<T extends { time: unknown }>(records: T[]): T[] {
+  return records
+    .map((record) => ({ record, time: timestampMs(record.time) }))
+    .filter(
+      (entry): entry is { record: T; time: number } => entry.time !== null,
+    )
+    .sort((a, b) => a.time - b.time)
+    .map(({ record }) => record);
+}
+
 function normalizeResponse(raw: LoadRecordsResponse | undefined) {
-  const records = Array.isArray(raw?.records) ? [...raw.records] : [];
-  records.sort(
-    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
-  );
+  const records = Array.isArray(raw?.records)
+    ? sortedRecordsByTime(raw.records)
+    : [];
   const gpuDevices = Object.values(raw?.gpu_devices ?? {})
     .map((device) => ({
       ...device,
       records: Array.isArray(device.records)
-        ? [...device.records].sort(
-            (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
-          )
+        ? sortedRecordsByTime(device.records)
         : [],
     }))
     .filter((device) => device.records.length > 0)
@@ -40,28 +50,40 @@ export function useLoadRecords(uuid: string, hours: number) {
   const [gpuDevices, setGpuDevices] = useState<GPUDeviceRecords[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestKeyRef = useRef("");
 
   useEffect(() => {
     if (!publicInfo?.record_enabled) {
       setRecords([]);
       setGpuDevices([]);
+      setIsLoading(false);
+      setError(null);
       return;
     }
 
     if (!uuid || hours <= 0) {
       setRecords([]);
       setGpuDevices([]);
+      setIsLoading(false);
+      setError(null);
       return;
     }
 
     if (maxHours > 0 && hours > maxHours) {
       setRecords([]);
       setGpuDevices([]);
+      setIsLoading(false);
       setError(null);
       return;
     }
 
     let cancelled = false;
+    const requestKey = `${uuid}:${hours}`;
+    if (requestKeyRef.current !== requestKey) {
+      requestKeyRef.current = requestKey;
+      setRecords([]);
+      setGpuDevices([]);
+    }
     setIsLoading(true);
     setError(null);
 
@@ -75,14 +97,17 @@ export function useLoadRecords(uuid: string, hours: number) {
               { uuid, load_type: "all", hours: String(hours) },
             );
           } catch (error) {
-            noteRpcMethodFailure(PUBLIC_RECORDS_METHOD, error);
+            if (!noteRpcMethodFailure(PUBLIC_RECORDS_METHOD, error)) {
+              throw error;
+            }
           }
         }
         if (!result) {
-          result = await call<
-            { uuid: string; type: string; hours: number },
-            LoadRecordsResponse
-          >("common:getRecords", { uuid, type: "load", hours });
+          result = await queryCommonRecords<LoadRecordsResponse>(call, {
+            uuid,
+            type: "load",
+            hours,
+          });
         }
 
         if (cancelled) return;
@@ -90,9 +115,18 @@ export function useLoadRecords(uuid: string, hours: number) {
         setRecords(normalized.records);
         setGpuDevices(normalized.gpuDevices);
       } catch (rpcErr) {
+        if (!isRpcMethodUnsupported(rpcErr)) {
+          if (!cancelled) {
+            setError(
+              rpcErr instanceof Error ? rpcErr.message : "Failed to fetch load",
+            );
+          }
+          return;
+        }
         try {
           const res = await fetch(
             `/api/records/load?uuid=${encodeURIComponent(uuid)}&hours=${hours}`,
+            { signal: AbortSignal.timeout(15_000) },
           );
           if (!res.ok) throw rpcErr;
           const json = await res.json();
@@ -106,8 +140,6 @@ export function useLoadRecords(uuid: string, hours: number) {
             setError(
               rpcErr instanceof Error ? rpcErr.message : "Failed to fetch load",
             );
-            setRecords([]);
-            setGpuDevices([]);
           }
         }
       } finally {

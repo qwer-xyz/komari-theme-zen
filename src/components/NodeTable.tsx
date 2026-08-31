@@ -3,8 +3,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+  useDeferredValue,
+} from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { VPSNode } from "../types";
 import { translations, Lang, formatMsg } from "../lib/i18n";
 import {
@@ -47,6 +54,7 @@ import { zenType, zenTouch } from "@/lib/typography";
 import { zenBorder, zenFill, zenInteractive, zenText } from "@/lib/zenSemantics";
 import { zenMotion } from "@/lib/zenMotion";
 import { ZenTabControl } from "@/components/motion/ZenTabControl";
+import { safePercent } from "@/lib/numeric";
 
 interface NodeTableProps {
   nodes: VPSNode[];
@@ -153,25 +161,60 @@ export function NodeTable({
     latencyColorConfig,
   } = useThemeSettings();
   const { recordEnabled } = useRecordSettings();
-  const latencyVisible = recordEnabled && showLatency;
+  const latencyVisible =
+    showLatency && (recordEnabled || nodes.some((node) => node.latency > 0));
   const [searchParams, setSearchParams] = useSearchParams();
   const routeGroup = (searchParams.get("group") ?? "").trim();
+  const routeSearch = searchParams.get("q") ?? "";
+  const routeSort = searchParams.get("sort") as SortField | null;
+  const routeOrder = searchParams.get("order") as SortOrder | null;
 
   const mappedDefaultSort = SORT_FIELD_MAP[defaultSortField] ?? "default";
+  const validSortFields = new Set<SortField>([
+    "default",
+    "status",
+    "name",
+    "os",
+    "cpu",
+    "mem",
+    "disk",
+    "bandwidth",
+    "traffic",
+    "latency",
+    "days",
+  ]);
+  const requestedSort = routeSort && validSortFields.has(routeSort)
+    ? routeSort
+    : mappedDefaultSort;
   const initialSortField: SortField =
-    mappedDefaultSort === "latency" && !latencyVisible ? "default" : mappedDefaultSort;
+    (requestedSort === "latency" && !latencyVisible) ||
+    (requestedSort === "days" && !showExpiryTime)
+      ? "default"
+      : requestedSort;
   const initialSortOrder: SortOrder =
-    defaultSortOrder === "Descending" ? "desc" : "asc";
+    routeOrder === "asc" || routeOrder === "desc"
+      ? routeOrder
+      : defaultSortOrder === "Descending"
+        ? "desc"
+        : "asc";
 
   const [activeGroup, setActiveGroup] = useState<string>(
     () => routeGroup || ALL_NODE_GROUP,
   );
   const [latencyModalNode, setLatencyModalNode] = useState<VPSNode | null>(null);
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [sortField, setSortField] = useState<SortField>(initialSortField);
-  const [sortOrder, setSortOrder] = useState<SortOrder>(initialSortOrder);
-  const [isSortMenuOpen, setIsSortMenuOpen] = useState<boolean>(false);
-  const userSortedRef = React.useRef(false);
+  const [searchTerm, setSearchTerm] = useState<string>(routeSearch);
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const sortField = initialSortField;
+  const sortOrder = initialSortOrder;
+  const [openSortMenu, setOpenSortMenu] = useState<
+    "mobile" | "desktop" | null
+  >(null);
+  const sortMenuIdPrefix = React.useId();
+  const mobileSortMenuRef = useRef<HTMLDivElement>(null);
+  const desktopSortMenuRef = useRef<HTMLDivElement>(null);
+  const mobileSortMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const desktopSortMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const searchEditedRef = React.useRef(false);
   const groupScrollRef = useRef<HTMLDivElement>(null);
   const [groupScrollFade, setGroupScrollFade] = useState({ left: false, right: false });
 
@@ -188,17 +231,41 @@ export function NodeTable({
 
   const { viewMode, effectiveViewMode, setViewMode } = useViewMode(defaultViewMode);
 
+  useEffect(() => {
+    if (!openSortMenu) return;
+    const menuRef = openSortMenu === "mobile"
+      ? mobileSortMenuRef
+      : desktopSortMenuRef;
+    const frame = window.requestAnimationFrame(() => {
+      const current = menuRef.current?.querySelector<HTMLElement>(
+        '[aria-checked="true"]',
+      );
+      const first = menuRef.current?.querySelector<HTMLElement>("button");
+      (current ?? first)?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [openSortMenu]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const closeOnBreakpointChange = () => setOpenSortMenu(null);
+    media.addEventListener("change", closeOnBreakpointChange);
+    return () => media.removeEventListener("change", closeOnBreakpointChange);
+  }, []);
+
   const updateGroupSearchParam = useCallback(
     (group: string, replace = false) => {
-      const nextParams = new URLSearchParams(searchParams);
-      if (group === ALL_NODE_GROUP) {
-        nextParams.delete("group");
-      } else {
-        nextParams.set("group", group);
-      }
-      setSearchParams(nextParams, { replace });
+      setSearchParams((previous) => {
+        const nextParams = new URLSearchParams(previous);
+        if (group === ALL_NODE_GROUP) {
+          nextParams.delete("group");
+        } else {
+          nextParams.set("group", group);
+        }
+        return nextParams;
+      }, { replace });
     },
-    [searchParams, setSearchParams],
+    [setSearchParams],
   );
 
   const handleGroupChange = useCallback(
@@ -208,19 +275,6 @@ export function NodeTable({
     },
     [updateGroupSearchParam],
   );
-
-  // Apply admin-configured default until the user manually changes the sort.
-  React.useEffect(() => {
-    if (userSortedRef.current) return;
-    setSortField(initialSortField);
-    setSortOrder(initialSortOrder);
-  }, [initialSortField, initialSortOrder]);
-
-  React.useEffect(() => {
-    if (!latencyVisible && sortField === "latency") {
-      setSortField("default");
-    }
-  }, [latencyVisible, sortField]);
 
   const getFieldLabel = (field: SortField) => {
     switch (field) {
@@ -459,7 +513,7 @@ export function NodeTable({
     return collectNodeGroups(nodes);
   }, [nodes]);
   const hasOfflineNodes = useMemo(
-    () => nodes.some((node) => !node.online),
+    () => nodes.some((node) => node.status === "offline"),
     [nodes],
   );
   const showOfflineTab = showOfflineGroup && hasOfflineNodes;
@@ -470,6 +524,66 @@ export function NodeTable({
     const nextGroup = routeGroup || ALL_NODE_GROUP;
     setActiveGroup(nextGroup);
   }, [routeGroup]);
+
+  useEffect(() => {
+    searchEditedRef.current = false;
+    setSearchTerm(routeSearch);
+  }, [routeSearch]);
+
+  useEffect(() => {
+    if (!searchEditedRef.current) return;
+    const timer = window.setTimeout(() => {
+      if (!searchEditedRef.current) return;
+      searchEditedRef.current = false;
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          const query = searchTerm.trim();
+          if (query) next.set("q", query);
+          else next.delete("q");
+          return next;
+        },
+        { replace: true },
+      );
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm, setSearchParams]);
+
+  const setSortPreference = useCallback((field: SortField, order: SortOrder) => {
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (field === "default") {
+          if (mappedDefaultSort !== "default") {
+            next.set("sort", "default");
+          } else {
+            next.delete("sort");
+          }
+          next.delete("order");
+        } else {
+          next.set("sort", field);
+          next.set("order", order);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  }, [mappedDefaultSort, setSearchParams]);
+
+  useEffect(() => {
+    if (
+      (routeSort === "latency" && !latencyVisible) ||
+      (routeSort === "days" && !showExpiryTime)
+    ) {
+      setSortPreference("default", initialSortOrder);
+    }
+  }, [
+    initialSortOrder,
+    latencyVisible,
+    routeSort,
+    setSortPreference,
+    showExpiryTime,
+  ]);
 
   useEffect(() => {
     if (
@@ -499,23 +613,24 @@ export function NodeTable({
     const scroller = groupScrollRef.current;
     if (!scroller) return;
     const activeChip = scroller.querySelector<HTMLElement>("[data-group-active='true']");
-    activeChip?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    activeChip?.scrollIntoView({
+      inline: "center",
+      block: "nearest",
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
   }, [activeGroup, nodeGroups.length, showOfflineTab]);
-
-  useEffect(() => {
-    if (!showExpiryTime && sortField === "days") {
-      setSortField("default");
-    }
-  }, [showExpiryTime, sortField]);
 
   // Filter & Search
   const filteredNodes = useMemo(() => {
-    const lowerSearch = searchTerm.trim().toLowerCase();
+    const lowerSearch = deferredSearchTerm.trim().toLowerCase();
     return nodes.filter((node) => {
       const matchGroup =
         activeGroup === ALL_NODE_GROUP ||
         (activeGroup === OFFLINE_NODE_GROUP
-          ? showOfflineTab && !node.online
+          ? showOfflineTab && node.status === "offline"
           : node.nodeGroup === activeGroup);
       const matchSearch = lowerSearch
         ? node.name.toLowerCase().includes(lowerSearch) ||
@@ -528,7 +643,7 @@ export function NodeTable({
         : true;
       return matchGroup && matchSearch;
     });
-  }, [nodes, activeGroup, searchTerm, showOfflineTab]);
+  }, [nodes, activeGroup, deferredSearchTerm, showOfflineTab]);
 
   // Sorting — "default" keeps the order returned by the Komari backend
   // (already weighted + offline-positioned upstream in useKomariNodes).
@@ -551,19 +666,30 @@ export function NodeTable({
     7;
 
   const handleSort = useCallback((field: SortField) => {
-    userSortedRef.current = true;
     if (sortField === field) {
       if (sortOrder === "desc") {
-        setSortOrder("asc");
+        setSortPreference(field, "asc");
       } else {
-        setSortField("default");
-        setSortOrder(initialSortOrder);
+        setSortPreference("default", initialSortOrder);
       }
     } else {
-      setSortField(field);
-      setSortOrder("desc"); // Default to desc for performance metrics
+      setSortPreference(field, "desc");
     }
-  }, [initialSortOrder, sortField, sortOrder]);
+  }, [initialSortOrder, setSortPreference, sortField, sortOrder]);
+
+  const handleNodeContainerClick = useCallback(
+    (event: React.MouseEvent, node: VPSNode) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("a, button, input, select, textarea, [role='button']")
+      ) {
+        return;
+      }
+      onSelectNode(node);
+    },
+    [onSelectNode],
+  );
 
   const getSortOrderIcon = (order: SortOrder) => (order === "asc" ? "▲" : "▼");
 
@@ -606,24 +732,47 @@ export function NodeTable({
     return (
       <th
         key={field}
-        className={`py-4 px-2 font-black cursor-pointer whitespace-nowrap ${zenMotion.sortHeader} ${
-          isActive ? "text-zen-accent" : "hover:text-zen-accent"
-        }`}
-        onClick={() => handleSort(field)}
+        scope="col"
+        aria-sort={
+          isActive ? (sortOrder === "asc" ? "ascending" : "descending") : "none"
+        }
+        className="py-2 px-2 font-black whitespace-nowrap"
       >
-        {label}
-        <span
-          className={`inline-block transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.34,1.45,0.64,1)] ${
-            isActive ? "scale-110 opacity-100" : "opacity-55"
+        <button
+          type="button"
+          className={`inline-flex min-h-9 items-center gap-0.5 py-2 font-inherit ${zenMotion.sortHeader} ${
+            isActive ? "text-zen-accent" : "hover:text-zen-accent"
           }`}
+          onClick={() => handleSort(field)}
         >
-          {getSortIndicator(field)}
-        </span>
+          {label}
+          <span
+            aria-hidden="true"
+            className={`inline-block transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.34,1.45,0.64,1)] ${
+              isActive ? "scale-110 opacity-100" : "opacity-55"
+            }`}
+          >
+            {getSortIndicator(field)}
+          </span>
+        </button>
       </th>
     );
   };
 
-  const renderStatsBar = (mobileFooter: boolean) => (
+  const renderStatsBar = (mobileFooter: boolean) => {
+    const placement = mobileFooter ? "mobile" : "desktop";
+    const menuOpen = openSortMenu === placement;
+    const menuId = `${sortMenuIdPrefix}-${placement}`;
+    const menuRef = mobileFooter ? mobileSortMenuRef : desktopSortMenuRef;
+    const triggerRef = mobileFooter
+      ? mobileSortMenuTriggerRef
+      : desktopSortMenuTriggerRef;
+    const closeAndRestoreFocus = () => {
+      setOpenSortMenu(null);
+      window.requestAnimationFrame(() => triggerRef.current?.focus());
+    };
+
+    return (
     <div
       className={`${zenType.label} tracking-[0.2em] ${textMuted} flex flex-wrap justify-between items-center gap-x-4 gap-y-2 uppercase font-mono ${
         mobileFooter ? "pt-3 border-t border-zen-line-strong" : "sm:items-baseline tracking-[0.25em]"
@@ -637,9 +786,15 @@ export function NodeTable({
         <div className="relative inline-block text-left">
           <button
             type="button"
-            onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
-            className={`cursor-pointer select-none font-bold flex items-center gap-1 uppercase leading-none transition-[color,transform] duration-300 ease-[cubic-bezier(0.34,1.45,0.64,1)] active:scale-[0.97] ${
-              isSortMenuOpen ? "text-zen-accent" : textPrimary
+            ref={triggerRef}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            aria-controls={menuOpen ? menuId : undefined}
+            onClick={() =>
+              setOpenSortMenu((open) => (open === placement ? null : placement))
+            }
+            className={`min-h-11 cursor-pointer select-none font-bold flex items-center gap-1 uppercase leading-none transition-[color,transform] duration-300 ease-[cubic-bezier(0.34,1.45,0.64,1)] active:scale-[0.97] ${
+              menuOpen ? "text-zen-accent" : textPrimary
             }`}
           >
             {getFieldLabel(sortField)}
@@ -652,14 +807,68 @@ export function NodeTable({
               </span>
             ) : null}
           </button>
-          {isSortMenuOpen && (
+          {menuOpen && (
             <>
-              <div className="fixed inset-0 z-40 cursor-default" onClick={() => setIsSortMenuOpen(false)} />
-              <div className={`absolute right-0 top-full z-50 w-44 border overflow-hidden ${zenMotion.menuPanel} ${
+              <div
+                className="fixed inset-0 z-40 cursor-default"
+                aria-hidden="true"
+                onClick={() => setOpenSortMenu(null)}
+              />
+              <div
+                id={menuId}
+                ref={menuRef}
+                role="menu"
+                aria-label={t.selectSortMetric}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeAndRestoreFocus();
+                    return;
+                  }
+                  if (
+                    event.key !== "ArrowDown" &&
+                    event.key !== "ArrowUp" &&
+                    event.key !== "Home" &&
+                    event.key !== "End"
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  const items = [
+                    ...(event.currentTarget.querySelectorAll(
+                      "button:not(:disabled)",
+                    ) as NodeListOf<HTMLButtonElement>),
+                  ];
+                  if (items.length === 0) return;
+                  const current = Math.max(
+                    0,
+                    items.indexOf(document.activeElement as HTMLButtonElement),
+                  );
+                  const next = event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? items.length - 1
+                      : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
+                        items.length;
+                  items[next]?.focus();
+                }}
+                onBlur={(event) => {
+                  const next = event.relatedTarget;
+                  if (
+                    next instanceof Node &&
+                    (event.currentTarget.contains(next) ||
+                      triggerRef.current?.contains(next))
+                  ) {
+                    return;
+                  }
+                  setOpenSortMenu(null);
+                }}
+                className={`absolute right-0 top-full z-50 w-44 border overflow-hidden ${zenMotion.menuPanel} ${
                 theme === "dark"
                   ? "bg-zen-bg border-zen-border-muted text-zen-fg-muted"
                   : "bg-zen-bg border-zen-border text-zen-fg-strong"
-              }`}>
+              }`}
+              >
                 <div className={`px-2.5 py-1.5 border-b ${zenType.micro} zen-track-tight font-bold ${
                   "border-zen-border-muted text-zen-fg-subtle"
                 }`}>
@@ -670,24 +879,23 @@ export function NodeTable({
                     const isCurrent = sortField === opt.value;
                     return (
                       <button
+                        type="button"
                         key={opt.value}
+                        role="menuitemradio"
+                        aria-checked={isCurrent}
                         onClick={() => {
-                          userSortedRef.current = true;
                           if (opt.value === "default") {
-                            setSortField("default");
-                            setSortOrder(initialSortOrder);
+                            setSortPreference("default", initialSortOrder);
                           } else if (isCurrent) {
                             if (sortOrder === "desc") {
-                              setSortOrder("asc");
+                              setSortPreference(opt.value, "asc");
                             } else {
-                              setSortField("default");
-                              setSortOrder(initialSortOrder);
+                              setSortPreference("default", initialSortOrder);
                             }
                           } else {
-                            setSortField(opt.value);
-                            setSortOrder("desc");
+                            setSortPreference(opt.value, "desc");
                           }
-                          setIsSortMenuOpen(false);
+                          closeAndRestoreFocus();
                         }}
                         className={`w-full text-left px-3 py-2 md:py-1.5 ${zenType.caption} tracking-wider uppercase font-mono transition-colors flex items-center justify-between ${
                           isCurrent
@@ -707,13 +915,20 @@ export function NodeTable({
                 </div>
                 <div className="border-t p-1 border-zen-line">
                   <button
+                    type="button"
+                    role="menuitem"
+                    disabled={sortField === "default"}
                     onClick={() => {
-                      userSortedRef.current = true;
-                      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                      setIsSortMenuOpen(false);
+                      if (sortField !== "default") {
+                        setSortPreference(
+                          sortField,
+                          sortOrder === "asc" ? "desc" : "asc",
+                        );
+                      }
+                      closeAndRestoreFocus();
                     }}
                     aria-label={sortOrder === "asc" ? t.setSortDescending : t.setSortAscending}
-                    className={`w-full text-center px-1 py-1 ${zenType.caption} uppercase font-bold tracking-widest text-zen-accent hover:underline transition-all`}
+                    className={`w-full min-h-9 text-center px-1 py-1 ${zenType.caption} uppercase font-bold tracking-widest text-zen-accent hover:underline transition-all disabled:cursor-not-allowed disabled:opacity-40`}
                   >
                     [ {getSortOrderIcon(sortOrder === "asc" ? "desc" : "asc")} ]
                   </button>
@@ -724,7 +939,8 @@ export function NodeTable({
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const openLatencyModal = useCallback((node: VPSNode) => {
     setLatencyModalNode(node);
@@ -755,6 +971,7 @@ export function NodeTable({
               />
             ) : null}
             <ZenTabControl
+              ariaLabel={t.lblClusterNodeStatus}
               ref={groupScrollRef}
               variant="pill"
               scrollable
@@ -775,6 +992,7 @@ export function NodeTable({
             </span>
             <div className={`inline-flex rounded-full p-0.5 ${segmentTrackClass}`}>
               <ZenTabControl
+                ariaLabel={t.viewMode}
                 variant="pill"
                 tabs={viewModeTabs}
                 value={viewMode}
@@ -790,17 +1008,23 @@ export function NodeTable({
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                searchEditedRef.current = true;
+                setSearchTerm(e.target.value);
+              }}
               placeholder={t.search}
               aria-label={t.search}
-              className={`w-full min-w-0 rounded-md border border-zen-line-strong bg-zen-elevate/15 px-3 py-2 outline-none transition-all font-mono ${zenType.body} tracking-wide uppercase ${textPrimary} placeholder:text-zen-fg-faint/60`}
+              className={`w-full min-w-0 rounded-md border border-zen-line-strong bg-zen-elevate/15 px-3 py-2 transition-[border-color,box-shadow] font-mono ${zenType.body} tracking-wide uppercase ${textPrimary} placeholder:text-zen-fg-faint/60`}
             />
             {searchTerm ? (
               <button
                 type="button"
-                onClick={() => setSearchTerm("")}
+                onClick={() => {
+                  searchEditedRef.current = true;
+                  setSearchTerm("");
+                }}
                 className={`absolute right-2 ${zenInteractive.clear} font-mono ${zenType.caption} cursor-pointer`}
-                aria-label="Clear"
+                aria-label={t.clearSearch}
               >
                 [X]
               </button>
@@ -817,6 +1041,7 @@ export function NodeTable({
           {showGroupTabs ? (
             <div className="flex h-8 min-w-0 flex-1 items-center overflow-x-auto overscroll-x-contain scroll-smooth pr-2 whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <ZenTabControl
+                ariaLabel={t.lblClusterNodeStatus}
                 tabs={groupTabItems}
                 value={activeGroup}
                 onChange={handleGroupChange}
@@ -841,6 +1066,7 @@ export function NodeTable({
             <div className={`flex h-8 items-center gap-3 ${zenType.caption} tracking-[0.2em] uppercase`}>
               <span className={`${textMuted} shrink-0 leading-none`}>{t.viewMode}:</span>
               <ZenTabControl
+                ariaLabel={t.viewMode}
                 tabs={viewModeTabs.map((tab) => ({
                   ...tab,
                   label: `[ ${tab.label} ]`,
@@ -864,15 +1090,23 @@ export function NodeTable({
                 <input
                   type="text"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    searchEditedRef.current = true;
+                    setSearchTerm(e.target.value);
+                  }}
                   placeholder="..."
-                  className={`min-w-0 w-40 border-0 bg-transparent py-1 pl-1 pr-0 outline-none transition-all font-mono ${zenType.body} placeholder:text-zen-fg-faint tracking-wider uppercase ${textPrimary}`}
+                  aria-label={t.search}
+                  className={`min-w-0 w-40 border-0 bg-transparent py-1 pl-1 pr-0 transition-[color,box-shadow] font-mono ${zenType.body} placeholder:text-zen-fg-faint tracking-wider uppercase ${textPrimary}`}
                 />
                 {searchTerm ? (
                   <button
                     type="button"
-                    onClick={() => setSearchTerm("")}
+                    onClick={() => {
+                      searchEditedRef.current = true;
+                      setSearchTerm("");
+                    }}
                     className={`shrink-0 py-1 leading-none ${zenInteractive.clear} font-mono ${zenType.caption} cursor-pointer`}
+                    aria-label={t.clearSearch}
                   >
                     [X]
                   </button>
@@ -891,7 +1125,7 @@ export function NodeTable({
           className={`overflow-x-auto w-full ${collectionMotionClass}`}
           aria-busy={collectionTransitioning}
         >
-          <table className="km-ui-table w-full min-w-[1100px] text-left select-none border-collapse">
+          <table className="km-ui-table w-full min-w-[1100px] text-left border-collapse">
             <thead>
               <tr className={`${textMuted} ${zenType.caption} zen-track-tight uppercase border-b ${borderBottomClass} whitespace-nowrap`}>
                 {renderSortHeader("name", t.name)}
@@ -921,7 +1155,10 @@ export function NodeTable({
                       ? "text-zen-warning font-bold" 
                       : textPrimary;
 
-                  const memPercent = (node.memoryUsed / node.memoryTotal) * 100;
+                  const memPercent = safePercent(
+                    node.memoryUsed,
+                    node.memoryTotal,
+                  );
                   const memColor =
                     memPercent > 80
                       ? "text-zen-danger font-bold" 
@@ -929,7 +1166,10 @@ export function NodeTable({
                       ? "text-zen-warning font-bold" 
                       : textPrimary;
 
-                  const diskPercent = (node.diskUsed / node.diskTotal) * 100;
+                  const diskPercent = safePercent(
+                    node.diskUsed,
+                    node.diskTotal,
+                  );
                   const diskColor =
                     diskPercent > 80
                       ? "text-zen-danger font-bold" 
@@ -940,9 +1180,13 @@ export function NodeTable({
                   return (
                     <tr
                       key={node.id}
-                      onClick={() => onSelectNode(node)}
+                      onClick={(event) => handleNodeContainerClick(event, node)}
                       className={`km-ui-table-row cursor-pointer group border-b border-zen-line hover:bg-zen-elevate transition-[background-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                        !node.online ? "opacity-35 grayscale contrast-75 saturate-50 select-none" : ""
+                        node.status === "offline"
+                          ? "bg-zen-fill-muted/10 text-zen-fg-muted"
+                          : node.status === "unknown"
+                            ? "bg-zen-warning/[0.04]"
+                            : ""
                       }`}
                     >
                       {/* Identification */}
@@ -950,9 +1194,27 @@ export function NodeTable({
                         <div className="flex flex-col gap-0.5 min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
                             <Flag flag={node.flag} className="w-4 h-4 shrink-0" />
-                            <span className="min-w-0 flex-1 truncate max-w-[240px] md:max-w-[200px]" title={node.name}>
+                            <Link
+                              to={`/instance/${encodeURIComponent(node.id)}`}
+                              state={{ fromDashboard: true }}
+                              className="min-w-0 flex-1 truncate max-w-[240px] md:max-w-[200px] hover:text-zen-accent hover:underline underline-offset-2"
+                              title={node.name}
+                            >
                               {node.name}
-                            </span>
+                            </Link>
+                            {node.status !== "online" ? (
+                              <span
+                                className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-bold ${
+                                  node.status === "unknown"
+                                    ? "border-zen-warning/40 text-zen-warning"
+                                    : "border-zen-border-muted text-zen-fg-muted"
+                                }`}
+                              >
+                                {node.status === "unknown"
+                                  ? t.statusUnknown
+                                  : t.connectionOffline}
+                              </span>
+                            ) : null}
                             <PublicRemarkButton
                               publicRemark={node.publicRemark}
                               privateRemark={node.privateRemark}
@@ -1033,6 +1295,7 @@ export function NodeTable({
                             theme={theme}
                             textPrimary={textPrimary}
                             colorConfig={latencyColorConfig}
+                            historyLabel={t.latencyHistoryAria}
                             onValueClick={() => openLatencyModal(node)}
                           />
                         ) : (
@@ -1096,7 +1359,7 @@ export function NodeTable({
                     ? "text-zen-warning font-bold"
                     : textPrimary;
 
-              const memPercent = (node.memoryUsed / node.memoryTotal) * 100;
+              const memPercent = safePercent(node.memoryUsed, node.memoryTotal);
               const memColor =
                 memPercent > 80
                   ? "text-zen-danger font-bold"
@@ -1104,7 +1367,7 @@ export function NodeTable({
                     ? "text-zen-warning font-bold"
                     : textPrimary;
 
-              const diskPercent = (node.diskUsed / node.diskTotal) * 100;
+              const diskPercent = safePercent(node.diskUsed, node.diskTotal);
               const diskColor =
                 diskPercent > 80
                   ? "text-zen-danger font-bold"
@@ -1113,10 +1376,16 @@ export function NodeTable({
                     : textPrimary;
 
               return (
-                <div
+                <article
                   key={node.id}
-                  onClick={() => onSelectNode(node)}
-                  className={`km-node-card cursor-pointer group flex flex-col gap-3 p-4 sm:p-5 rounded-xl border border-zen-line bg-zen-elevate shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zen-line-strong hover:shadow-[0_4px_14px_rgba(0,0,0,0.06)] ${zenMotion.card} ${!node.online ? "opacity-35 grayscale contrast-75 saturate-50 select-none" : ""}`}
+                  onClick={(event) => handleNodeContainerClick(event, node)}
+                  className={`km-node-card cursor-pointer group flex flex-col gap-3 p-4 sm:p-5 rounded-xl border border-zen-line bg-zen-elevate shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zen-line-strong hover:shadow-[0_4px_14px_rgba(0,0,0,0.06)] [content-visibility:auto] [contain-intrinsic-size:auto_320px] ${zenMotion.card} ${
+                    node.status === "offline"
+                      ? "bg-zen-fill-muted/10 text-zen-fg-muted"
+                      : node.status === "unknown"
+                        ? "border-zen-warning/35 bg-zen-warning/[0.04]"
+                        : ""
+                  }`}
                 >
                   {/* Card header：标签与标题同一行，不额外占高 */}
                   <div className="flex items-center gap-2 min-w-0">
@@ -1125,8 +1394,27 @@ export function NodeTable({
                       className={`min-w-0 flex-1 truncate font-sans ${zenType.body} font-bold tracking-tight ${textPrimary}`}
                       title={node.name}
                     >
-                      {node.name}
+                      <Link
+                        to={`/instance/${encodeURIComponent(node.id)}`}
+                        state={{ fromDashboard: true }}
+                        className="hover:text-zen-accent hover:underline underline-offset-2"
+                      >
+                        {node.name}
+                      </Link>
                     </h4>
+                    {node.status !== "online" ? (
+                      <span
+                        className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-bold ${
+                          node.status === "unknown"
+                            ? "border-zen-warning/40 text-zen-warning"
+                            : "border-zen-border-muted text-zen-fg-muted"
+                        }`}
+                      >
+                        {node.status === "unknown"
+                          ? t.statusUnknown
+                          : t.connectionOffline}
+                      </span>
+                    ) : null}
                     <NodeTags
                       tags={node.tags}
                       theme={theme}
@@ -1206,6 +1494,7 @@ export function NodeTable({
                           theme={theme}
                           textPrimary={textPrimary}
                           colorConfig={latencyColorConfig}
+                          historyLabel={t.latencyHistoryAria}
                           onValueClick={() => openLatencyModal(node)}
                         />
                       ) : (
@@ -1245,7 +1534,7 @@ export function NodeTable({
                       </div>
                     )}
                   </div>
-                </div>
+                </article>
               );
             })
           )}

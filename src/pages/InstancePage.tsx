@@ -4,7 +4,12 @@
  */
 
 import React, { useLayoutEffect } from "react";
-import { useNavigate, useOutletContext, useParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useOutletContext,
+  useParams,
+} from "react-router-dom";
 import { NodeDetail } from "@/components/NodeDetail";
 import { translations } from "@/lib/i18n";
 import { zenType } from "@/lib/typography";
@@ -14,6 +19,7 @@ import type { AppOutletContext } from "@/layouts/AppLayout";
 export default function InstancePage() {
   const { uuid } = useParams<{ uuid: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { nodes, lang, theme } = useOutletContext<AppOutletContext>();
   const t = translations[lang];
 
@@ -24,6 +30,13 @@ export default function InstancePage() {
   }, [uuid]);
 
   const textMutedClass = `${zenText.subtle}/85`;
+  const goBack = () => {
+    if ((location.state as { fromDashboard?: boolean } | null)?.fromDashboard) {
+      navigate(-1);
+    } else {
+      navigate("/", { replace: true });
+    }
+  };
 
   return (
     <section className="km-page-instance">
@@ -33,7 +46,7 @@ export default function InstancePage() {
           node={node}
           lang={lang}
           theme={theme}
-          onBack={() => navigate("/")}
+          onBack={goBack}
         />
         </div>
       ) : (
@@ -43,7 +56,7 @@ export default function InstancePage() {
           <p>{t.selectVpsInput}</p>
           <button
             type="button"
-            onClick={() => navigate("/")}
+            onClick={goBack}
             className="inline-block text-zen-accent hover:underline normal-case tracking-normal cursor-pointer bg-transparent border-0 font-inherit"
           >
             [ {t.backToList} ]

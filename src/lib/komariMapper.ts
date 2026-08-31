@@ -97,6 +97,7 @@ export function mapKomariNodeToVps(
   online: boolean,
   history: NodeHistoryBuffers,
   latency = 0,
+  status: VPSNode["status"] = online ? "online" : "offline",
 ): VPSNode {
   const memoryTotal = bytesToGb(node.mem_total);
   const swapTotal = bytesToGb(node.swap_total);
@@ -133,6 +134,7 @@ export function mapKomariNodeToVps(
         ? live.updated_at
         : node.updated_at,
     online,
+    status,
     uptimeSec: online && live ? (live.uptime ?? 0) : 0,
     cpuCores: node.cpu_cores,
     cpuVendor: node.cpu_name,

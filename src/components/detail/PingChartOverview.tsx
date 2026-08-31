@@ -10,6 +10,7 @@ type PingChartOverviewProps = {
   onResetZoom: () => void;
   theme: "light" | "dark";
   ariaLabel: string;
+  keyboardHelp: string;
 };
 
 const HEIGHT = 44;
@@ -36,6 +37,7 @@ export function PingChartOverview({
   onResetZoom,
   theme,
   ariaLabel,
+  keyboardHelp,
 }: PingChartOverviewProps) {
   const width = 1000;
   const svgRef = React.useRef<SVGSVGElement>(null);
@@ -48,6 +50,9 @@ export function PingChartOverview({
       }
     | null
   >(null);
+  const moveFrameRef = React.useRef<number | null>(null);
+  const pendingClientXRef = React.useRef<number | null>(null);
+  const keyboardHelpId = React.useId();
 
   const chartHeight = HEIGHT - 12;
 
@@ -120,17 +125,83 @@ export function PingChartOverview({
   );
 
   React.useEffect(() => {
-    const onMove = (e: PointerEvent) => updateFromClientX(e.clientX);
-    const onUp = () => {
+    const onMove = (e: PointerEvent) => {
+      if (!dragRef.current) return;
+      pendingClientXRef.current = e.clientX;
+      if (moveFrameRef.current !== null) return;
+      moveFrameRef.current = window.requestAnimationFrame(() => {
+        moveFrameRef.current = null;
+        const clientX = pendingClientXRef.current;
+        if (clientX !== null) updateFromClientX(clientX);
+      });
+    };
+    const clearScheduledMove = () => {
+      if (moveFrameRef.current !== null) {
+        window.cancelAnimationFrame(moveFrameRef.current);
+        moveFrameRef.current = null;
+      }
+    };
+    const onUp = (event: PointerEvent) => {
+      if (dragRef.current) {
+        clearScheduledMove();
+        updateFromClientX(event.clientX);
+      }
       dragRef.current = null;
+      pendingClientXRef.current = null;
+    };
+    const onCancel = () => {
+      clearScheduledMove();
+      dragRef.current = null;
+      pendingClientXRef.current = null;
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
     return () => {
+      clearScheduledMove();
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
     };
   }, [updateFromClientX]);
+
+  const handleRangeKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+    const [fullStart, fullEnd] = fullRange;
+    const [viewStart, viewEnd] = viewRange;
+    const span = Math.max(60_000, viewEnd - viewStart);
+    if (event.key === "Home") {
+      event.preventDefault();
+      onResetZoom();
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      onViewRangeChange([Math.max(fullStart, fullEnd - span), fullEnd]);
+      return;
+    }
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const delta = span * 0.1 * (event.key === "ArrowLeft" ? -1 : 1);
+      const start = Math.max(
+        fullStart,
+        Math.min(viewStart + delta, fullEnd - span),
+      );
+      onViewRangeChange([start, start + span]);
+      return;
+    }
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      event.preventDefault();
+      const factor = event.key === "ArrowUp" ? 0.8 : 1.25;
+      const nextSpan = Math.max(
+        60_000,
+        Math.min(fullEnd - fullStart, span * factor),
+      );
+      const center = (viewStart + viewEnd) / 2;
+      let start = center - nextSpan / 2;
+      start = Math.max(fullStart, Math.min(start, fullEnd - nextSpan));
+      onViewRangeChange([start, start + nextSpan]);
+    }
+  };
 
   const beginDrag = (
     kind: NonNullable<typeof dragRef.current>["kind"],
@@ -149,14 +220,21 @@ export function PingChartOverview({
   };
 
   return (
-    <div className="relative select-none touch-none">
+    <div className="relative select-none touch-pan-y">
+      <span id={keyboardHelpId} className="sr-only">
+        {keyboardHelp}
+      </span>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${width} ${HEIGHT}`}
         preserveAspectRatio="none"
         className="w-full h-11 cursor-crosshair"
-        aria-label={ariaLabel}
-        role="img"
+        aria-label={`${ariaLabel}: ${new Date(viewRange[0]).toLocaleString()} – ${new Date(viewRange[1]).toLocaleString()}`}
+        aria-describedby={keyboardHelpId}
+        aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
+        role="group"
+        tabIndex={0}
+        onKeyDown={handleRangeKeyDown}
         onDoubleClick={onResetZoom}
         onPointerDown={(e) => {
           if (e.button !== 0) return;

@@ -9,25 +9,28 @@ import { resolveCountryCode } from "@/lib/regionCode";
 interface FlagProps {
   flag: string;
   className?: string;
+  label?: string;
 }
 
 function resolveFlagFileName(flag: string): string {
   return resolveCountryCode(flag) ?? "UN";
 }
 
-export const Flag = React.memo(({ flag, className = "w-4 h-4" }: FlagProps) => {
+export const Flag = React.memo(({ flag, className = "w-4 h-4", label }: FlagProps) => {
   const resolvedFlagFileName = resolveFlagFileName(flag);
   const imgSrc = `/assets/flags/${resolvedFlagFileName}.svg`;
-  const altText = `地区旗帜: ${resolvedFlagFileName}`;
 
   return (
     <span
       className={`inline-flex shrink-0 items-center self-center ${className}`}
-      aria-label={altText}
+      role="img"
+      aria-label={label || flag || resolvedFlagFileName}
     >
       <img
         src={imgSrc}
-        alt={altText}
+        alt=""
+        loading="lazy"
+        decoding="async"
         className="h-full w-full object-contain"
       />
     </span>

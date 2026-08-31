@@ -15,13 +15,13 @@ import { zenMotion } from "@/lib/zenMotion";
 
 export type NodeDistributionMapNode = Pick<
   VPSNode,
-  "id" | "name" | "flag" | "online"
+  "id" | "name" | "flag" | "status"
 >;
 
 type RegionNode = {
   id: string;
   name: string;
-  online: boolean;
+  status: VPSNode["status"];
 };
 
 type RegionCluster = {
@@ -30,6 +30,7 @@ type RegionCluster = {
   y: number;
   total: number;
   online: number;
+  unknown: number;
   nodes: RegionNode[];
 };
 
@@ -62,7 +63,7 @@ const MOBILE_MAP_WIDTH = 720;
 function buildRegionClusters(nodes: NodeDistributionMapNode[]): RegionCluster[] {
   const groups = new Map<
     string,
-    { total: number; online: number; regionNodes: RegionNode[] }
+    { total: number; online: number; unknown: number; regionNodes: RegionNode[] }
   >();
 
   for (const node of nodes) {
@@ -71,14 +72,16 @@ function buildRegionClusters(nodes: NodeDistributionMapNode[]): RegionCluster[] 
     const entry = groups.get(code) ?? {
       total: 0,
       online: 0,
+      unknown: 0,
       regionNodes: [],
     };
     entry.total += 1;
-    if (node.online) entry.online += 1;
+    if (node.status === "online") entry.online += 1;
+    if (node.status === "unknown") entry.unknown += 1;
     entry.regionNodes.push({
       id: node.id,
       name: node.name,
-      online: node.online,
+      status: node.status,
     });
     groups.set(code, entry);
   }
@@ -94,6 +97,7 @@ function buildRegionClusters(nodes: NodeDistributionMapNode[]): RegionCluster[] 
       y: centroid[1],
       total: stats.total,
       online: stats.online,
+      unknown: stats.unknown,
       nodes: stats.regionNodes,
     });
   }
@@ -189,35 +193,59 @@ function RegionClusterPanel({
   theme,
   lang,
   className = "",
+  id,
 }: {
   cluster: RegionCluster;
   theme: "light" | "dark";
   lang: Lang;
   className?: string;
+  id?: string;
 }) {
   const t = translations[lang];
   const shellClass = `${zenPopover} font-mono normal-case ${zenType.caption} tracking-normal`;
 
   return (
     <div
+      id={id}
       className={`rounded-sm border px-2.5 py-2 font-mono normal-case ${zenType.caption} tracking-normal ${shellClass} ${className}`}
     >
       <div className="font-bold mb-1.5 pb-1 border-b border-zen-line/80">
         {t.mapRegionTooltip(cluster.code, cluster.online, cluster.total)}
+        {cluster.unknown > 0
+          ? ` · ${t.statusUnknown}: ${cluster.unknown}`
+          : ""}
       </div>
       <ul className="space-y-0.5">
         {cluster.nodes.map((node) => (
           <li
             key={node.id}
             className={`flex items-center gap-1.5 leading-snug min-w-0 ${
-              node.online ? "" : "opacity-60"
+              node.status === "offline" ? "opacity-60" : ""
             }`}
           >
             <span
-              className={`shrink-0 ${node.online ? "text-zen-accent" : zenText.subtle}`}
+              className={`shrink-0 ${
+                node.status === "online"
+                  ? "text-zen-accent"
+                  : node.status === "unknown"
+                    ? "text-zen-warning"
+                    : zenText.subtle
+              }`}
               aria-hidden
             >
-              {node.online ? "●" : "○"}
+              {node.status === "online"
+                ? "●"
+                : node.status === "unknown"
+                  ? "◇"
+                  : "○"}
+            </span>
+            <span className="sr-only">
+              {node.status === "online"
+                ? t.hostOnline
+                : node.status === "offline"
+                  ? t.connectionOffline
+                  : t.statusUnknown}
+              {": "}
             </span>
             <span className="min-w-0 flex-1 truncate" title={node.name}>
               {node.name}
@@ -257,22 +285,26 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [hovered, setHovered] = useState<RegionCluster | null>(null);
-  const [tapped, setTapped] = useState<RegionCluster | null>(null);
+  const [hoveredCode, setHoveredCode] = useState<string | null>(null);
+  const [tappedCode, setTappedCode] = useState<string | null>(null);
   const [mapLayout, setMapLayout] = useState<MapLayout | null>(null);
+  const panelIdPrefix = React.useId();
   const hoverClearTimerRef = useRef<number | null>(null);
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window !== "undefined" && window.matchMedia(DESKTOP_MQ).matches,
   );
   const clusters = useMemo(() => buildRegionClusters(nodes), [nodes]);
+  const hovered = clusters.find((cluster) => cluster.code === hoveredCode) ?? null;
+  const tapped = clusters.find((cluster) => cluster.code === tappedCode) ?? null;
+  const hasClusters = clusters.length > 0;
   const effectiveDesktop = isModal || isDesktop;
 
   useEffect(() => {
     const mq = window.matchMedia(DESKTOP_MQ);
     const onChange = () => {
       setIsDesktop(mq.matches);
-      if (mq.matches) setTapped(null);
-      else setHovered(null);
+      if (mq.matches) setTappedCode(null);
+      else setHoveredCode(null);
     };
     onChange();
     mq.addEventListener("change", onChange);
@@ -323,17 +355,17 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
       ro.disconnect();
       if (raf) window.cancelAnimationFrame(raf);
     };
-  }, [theme, effectiveDesktop]);
+  }, [theme, effectiveDesktop, hasClusters]);
 
   const t = translations[lang];
   const textMuted = zenText.subtle;
   const markerFillOnline = "var(--zen-accent)";
   const markerFillOffline = theme === "dark" ? "#737373" : "#a3a3a3";
 
-  if (clusters.length === 0) return null;
-
   const toggleTapped = (cluster: RegionCluster) => {
-    setTapped((prev) => (prev?.code === cluster.code ? null : cluster));
+    setTappedCode((previous) =>
+      previous === cluster.code ? null : cluster.code,
+    );
   };
 
   const showClusterTooltip = (cluster: RegionCluster) => {
@@ -341,7 +373,7 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
       window.clearTimeout(hoverClearTimerRef.current);
       hoverClearTimerRef.current = null;
     }
-    setHovered(cluster);
+    setHoveredCode(cluster.code);
   };
 
   const hideClusterTooltip = () => {
@@ -349,9 +381,37 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
       window.clearTimeout(hoverClearTimerRef.current);
     }
     hoverClearTimerRef.current = window.setTimeout(() => {
-      setHovered(null);
+      setHoveredCode(null);
       hoverClearTimerRef.current = null;
     }, 64);
+  };
+
+  const selectNearestCluster = (
+    event: React.MouseEvent<SVGSVGElement>,
+  ) => {
+    if (isDesktop || clusters.length === 0) return;
+    const matrix = event.currentTarget.getScreenCTM();
+    if (!matrix) return;
+    let nearest: RegionCluster | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    const point = event.currentTarget.createSVGPoint();
+    for (const cluster of clusters) {
+      point.x = cluster.x;
+      point.y = cluster.y;
+      const screen = point.matrixTransform(matrix);
+      const distance = Math.hypot(
+        screen.x - event.clientX,
+        screen.y - event.clientY,
+      );
+      if (distance < nearestDistance) {
+        nearest = cluster;
+        nearestDistance = distance;
+      }
+    }
+    // Resolve dense regions by nearest centroid instead of overlapping large
+    // invisible circles. The whole map remains tappable without selecting a
+    // distant marker when the user taps empty ocean.
+    if (nearest && nearestDistance <= 32) toggleTapped(nearest);
   };
 
   useEffect(
@@ -362,6 +422,8 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
     },
     [],
   );
+
+  if (clusters.length === 0) return null;
 
   return (
     <section
@@ -413,7 +475,7 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
           className={
             isModal
               ? undefined
-              : "max-md:overflow-x-auto max-md:overscroll-x-contain max-md:snap-x max-md:snap-mandatory max-md:touch-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
+              : "max-md:overflow-x-auto max-md:overscroll-x-contain max-md:touch-auto max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden"
           }
         >
           <div
@@ -421,7 +483,7 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
             className={
               isModal
                 ? "relative mx-auto aspect-[2/1] w-full touch-manipulation"
-                : "relative mx-auto aspect-[2/1] touch-manipulation max-md:min-w-[720px] max-md:w-[720px] max-md:shrink-0 max-md:snap-center md:w-full md:max-h-none lg:w-[min(100%,1120px)] xl:w-[min(100%,1280px)]"
+                : "relative mx-auto aspect-[2/1] touch-manipulation max-md:min-w-[720px] max-md:w-[720px] max-md:shrink-0 md:w-full md:max-h-none lg:w-[min(100%,1120px)] xl:w-[min(100%,1280px)]"
             }
             style={
               !effectiveDesktop ? { width: MOBILE_MAP_WIDTH, minWidth: MOBILE_MAP_WIDTH } : undefined
@@ -437,35 +499,67 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
           viewBox={`0 0 ${MAP_W} ${MAP_H}`}
           className="absolute inset-0 h-full w-full overflow-visible"
           preserveAspectRatio="xMidYMid meet"
-          role="img"
+          role="group"
           aria-label={t.lblNodeDistribution}
+          onClick={selectNearestCluster}
         >
-          {effectiveDesktop ? (
-            <defs>
-              <filter id="zen-map-glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="1.8" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-          ) : null}
-
+          <rect
+            width={MAP_W}
+            height={MAP_H}
+            fill="transparent"
+            pointerEvents="all"
+            aria-hidden
+          />
           {clusters.map((cluster, index) => {
             const hasOnline = cluster.online > 0;
-            const fill = hasOnline ? markerFillOnline : markerFillOffline;
-            const r = effectiveDesktop ? 5 : 5.5;
+            const hasUnknown = cluster.unknown > 0;
+            const fill = hasOnline
+              ? markerFillOnline
+              : hasUnknown
+                ? "var(--zen-warning)"
+                : markerFillOffline;
+            const r = isDesktop ? 5 : isModal ? 8 : 5.5;
             const isTapped = tapped?.code === cluster.code;
             const twinkleDelay = `${((index * 0.83) % 3.6).toFixed(2)}s`;
-            const hitRadius = effectiveDesktop ? 14 : 24;
+            const hitRadius = isDesktop ? 14 : r + 4;
+            const regionPanelId = `${panelIdPrefix}-${cluster.code}`;
 
             return (
               <g
                 key={cluster.code}
-                onMouseEnter={effectiveDesktop ? () => showClusterTooltip(cluster) : undefined}
-                onMouseLeave={effectiveDesktop ? hideClusterTooltip : undefined}
-                onClick={!effectiveDesktop ? () => toggleTapped(cluster) : undefined}
+                role="button"
+                tabIndex={0}
+                aria-expanded={!isDesktop ? isTapped : undefined}
+                aria-controls={!isDesktop && isTapped ? regionPanelId : undefined}
+                aria-label={t.mapRegionTooltip(
+                  cluster.code,
+                  cluster.online,
+                  cluster.nodes.length,
+                ) +
+                  (cluster.unknown > 0
+                    ? ` · ${t.statusUnknown}: ${cluster.unknown}`
+                    : "")}
+                onMouseEnter={isDesktop ? () => showClusterTooltip(cluster) : undefined}
+                onMouseLeave={isDesktop ? hideClusterTooltip : undefined}
+                onClick={(event) => {
+                  // Assistive technology activates role=button with a
+                  // coordinate-less click. Pointer clicks keep bubbling to the
+                  // map-wide nearest-centroid resolver for dense regions.
+                  if (event.detail !== 0) return;
+                  event.stopPropagation();
+                  if (isDesktop) showClusterTooltip(cluster);
+                  else toggleTapped(cluster);
+                }}
+                onFocus={
+                  isDesktop ? () => showClusterTooltip(cluster) : undefined
+                }
+                onBlur={isDesktop ? hideClusterTooltip : undefined}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  if (isDesktop) showClusterTooltip(cluster);
+                  else toggleTapped(cluster);
+                }}
               >
                 <circle
                   cx={cluster.x}
@@ -484,7 +578,6 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
                         fill={fill}
                         className="zen-map-star-halo"
                         style={{ animationDelay: twinkleDelay }}
-                        filter="url(#zen-map-glow)"
                       />
                       <circle
                         cx={0}
@@ -493,7 +586,6 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
                         fill={fill}
                         className="zen-map-star-glow"
                         style={{ animationDelay: `calc(${twinkleDelay} + 0.55s)` }}
-                        filter="url(#zen-map-glow)"
                       />
                     </>
                   ) : null}
@@ -521,7 +613,7 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
           })}
         </svg>
 
-        {effectiveDesktop && hovered && mapLayout ? (
+        {isDesktop && hovered && mapLayout ? (
           <div
             className={`pointer-events-none absolute z-10 w-[max(9rem,min(11rem,42vw))] ${isModal ? "block" : "hidden md:block"}`}
             style={desktopTooltipStyle(hovered, mapLayout)}
@@ -535,9 +627,14 @@ export const NodeDistributionMap = React.memo(function NodeDistributionMap({
         </div>
       </div>
 
-      {!isModal && !effectiveDesktop && tapped ? (
-        <div className="md:hidden mt-2 max-md:px-4">
-          <RegionClusterPanel cluster={tapped} theme={theme} lang={lang} />
+      {!isDesktop && tapped ? (
+        <div className={`md:hidden mt-2 ${isModal ? "" : "max-md:px-4"}`}>
+          <RegionClusterPanel
+            id={`${panelIdPrefix}-${tapped.code}`}
+            cluster={tapped}
+            theme={theme}
+            lang={lang}
+          />
         </div>
       ) : null}
     </section>
@@ -560,7 +657,7 @@ function areMapNodesEqual(
       a.id !== b.id ||
       a.name !== b.name ||
       a.flag !== b.flag ||
-      a.online !== b.online
+      a.status !== b.status
     ) {
       return false;
     }

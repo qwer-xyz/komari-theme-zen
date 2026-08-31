@@ -5,6 +5,7 @@
 
 import type { LiveRecord } from "@/types/LiveData";
 import type { LoadRecord } from "@/types/records";
+import { timestampMs } from "@/lib/numeric";
 
 export type DashboardTrendSample = {
   t: number;
@@ -33,15 +34,6 @@ function finiteNumber(value: unknown): number | null {
         ? Number(value)
         : Number.NaN;
   return Number.isFinite(number) ? number : null;
-}
-
-function timestampMs(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value < 1_000_000_000_000 ? value * 1000 : value;
-  }
-  if (typeof value !== "string" || !value.trim()) return null;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function sumPair(a: unknown, b: unknown): number | null {

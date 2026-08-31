@@ -1,4 +1,5 @@
 import { hampelDespike } from "@/lib/recordTransform";
+import { timestampMs } from "@/lib/numeric";
 import type { PingRecord, PingTaskInfo } from "@/types/records";
 
 export type PingPoint = { t: number; v: number };
@@ -13,8 +14,8 @@ export function buildProbeSeriesByTask(
     if (typeof rec.value !== "number" || !Number.isFinite(rec.value) || rec.value <= 0) {
       continue;
     }
-    const t = new Date(rec.time).getTime();
-    if (!Number.isFinite(t)) continue;
+    const t = timestampMs(rec.time);
+    if (t === null) continue;
     points.push({ t, v: rec.value });
   }
   points.sort((a, b) => a.t - b.t);
@@ -38,8 +39,8 @@ export function computeRecordsTimeRange(
   let min = Infinity;
   let max = -Infinity;
   for (const rec of records) {
-    const t = new Date(rec.time).getTime();
-    if (!Number.isFinite(t)) continue;
+    const t = timestampMs(rec.time);
+    if (t === null) continue;
     min = Math.min(min, t);
     max = Math.max(max, t);
   }
