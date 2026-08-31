@@ -60,5 +60,16 @@ export function useLangPreference() {
 
   const lang: Lang = preference === "auto" ? systemLang : preference;
 
+  useEffect(() => {
+    const documentLang: Record<Lang, string> = {
+      en: "en",
+      zh: "zh-CN",
+      "zh-TW": "zh-TW",
+      ja: "ja",
+      id: "id",
+    };
+    document.documentElement.lang = documentLang[lang];
+  }, [lang]);
+
   return { preference, lang, setPreference };
 }

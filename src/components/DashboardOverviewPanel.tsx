@@ -287,7 +287,7 @@ export function DashboardOverviewPanel({
                         onClick={onOpenNodeMap}
                         aria-label={nodeMapLabel}
                         title={nodeMapLabel}
-                        className={`inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-zen-line bg-zen-elevate/35 text-zen-fg-muted hover:border-zen-accent/50 hover:text-zen-accent ${zenMotion.pop}`}
+                        className={`inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-zen-line bg-zen-elevate/35 text-zen-fg-muted hover:border-zen-accent/50 hover:text-zen-accent ${zenMotion.pop}`}
                       >
                         <Globe size={16} strokeWidth={1.8} aria-hidden />
                       </button>

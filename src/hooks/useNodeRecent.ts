@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LiveRecord } from "@/types/LiveData";
-
-type RecentApiResponse = {
-  data?: LiveRecord[];
-  status?: string;
-};
+import { fetchRecentRecords } from "@/lib/recordQueries";
 
 export function useNodeRecent(
   uuid: string | null,
@@ -18,13 +14,15 @@ export function useNodeRecent(
   useEffect(() => {
     if (!uuid || !enabled) {
       setRecords([]);
+      setIsLoading(false);
+      setError(null);
       return;
     }
 
     let stopped = false;
     let timer: number | undefined;
     let running = false;
-    let controller: AbortController | null = null;
+    setRecords([]);
 
     const scheduleNext = () => {
       if (stopped || document.hidden) return;
@@ -35,25 +33,18 @@ export function useNodeRecent(
       if (stopped || running || document.hidden) return;
       running = true;
       if (initial) setIsLoading(true);
-      controller = new AbortController();
       try {
-        const res = await fetch(`/api/recent/${encodeURIComponent(uuid)}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as RecentApiResponse;
+        const nextRecords = await fetchRecentRecords(uuid);
         if (!stopped) {
-          setRecords(Array.isArray(json.data) ? json.data : []);
+          setRecords(nextRecords);
           setError(null);
         }
       } catch (e) {
-        if (!stopped && !(e instanceof DOMException && e.name === "AbortError")) {
+        if (!stopped) {
           setError(e instanceof Error ? e.message : "Failed to fetch recent");
-          setRecords([]);
         }
       } finally {
         running = false;
-        controller = null;
         if (!stopped && initial) setIsLoading(false);
         scheduleNext();
       }
@@ -70,7 +61,6 @@ export function useNodeRecent(
 
     return () => {
       stopped = true;
-      controller?.abort();
       if (timer) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };

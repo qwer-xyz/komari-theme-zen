@@ -97,6 +97,8 @@ export type Messages = {
   unitDay: string;
   unitSec: string;
   noHistory: string;
+  historyRange: string;
+  latencyHistoryAria: (count: number) => string;
   tabMetrics: string;
   tabLatency: string;
   live: string;
@@ -145,10 +147,18 @@ export type Messages = {
   pingShowAll: string;
   pingResetZoom: string;
   pingOverviewAria: string;
+  pingOverviewKeyboardHelp: string;
   pingDataGap: string;
   loadingNodes: string;
   errorLoadNodes: string;
+  errorLoadPublicInfo: string;
   errorCheckEnv: string;
+  liveDataStale: string;
+  liveDataUnavailable: string;
+  retry: string;
+  statusUnknown: string;
+  clearSearch: string;
+  skipToContent: string;
   lblLoadAvgShort: string;
   lblLoad1m: string;
   billingFree: string;

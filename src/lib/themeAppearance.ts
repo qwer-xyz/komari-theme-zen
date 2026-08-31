@@ -16,6 +16,40 @@ import {
 } from "@/lib/themePreferenceStorage";
 
 const CACHE_KEY = "komari-zen-theme-settings";
+const CACHE_VERSION = 1;
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const APPEARANCE_KEYS = [
+  "colorPreset",
+  "customBgLight",
+  "customBgDark",
+  "customSurfaceLight",
+  "customSurfaceDark",
+  "customAccentLight",
+  "customAccentDark",
+  "fontPreset",
+  "fontFamilyCustom",
+  "fontCssUrlCustom",
+] as const;
+
+type ThemeSettingsCache = {
+  version: number;
+  fetchedAt: number;
+  settings: Record<string, unknown>;
+};
+
+function appearanceSettings(raw: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    APPEARANCE_KEYS.filter((key) => key in raw).map((key) => [key, raw[key]]),
+  );
+}
+
+function clearThemeSettingsCache(): void {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function readThemeSettingsCache(): Record<string, unknown> | null {
   try {
@@ -23,7 +57,26 @@ export function readThemeSettingsCache(): Record<string, unknown> | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object") return null;
-    return parsed as Record<string, unknown>;
+
+    const cache = parsed as Partial<ThemeSettingsCache>;
+    if (
+      cache.version === CACHE_VERSION &&
+      typeof cache.fetchedAt === "number" &&
+      cache.settings &&
+      typeof cache.settings === "object"
+    ) {
+      if (Date.now() - cache.fetchedAt > CACHE_TTL_MS) {
+        clearThemeSettingsCache();
+        return null;
+      }
+      return cache.settings;
+    }
+
+    // Read and immediately migrate the previous unversioned shape so it also
+    // gains the bounded lifetime on subsequent starts.
+    const migrated = appearanceSettings(parsed as Record<string, unknown>);
+    writeThemeSettingsCache(migrated);
+    return migrated;
   } catch {
     return null;
   }
@@ -31,7 +84,12 @@ export function readThemeSettingsCache(): Record<string, unknown> | null {
 
 export function writeThemeSettingsCache(raw: Record<string, unknown>): void {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(raw));
+    const cache: ThemeSettingsCache = {
+      version: CACHE_VERSION,
+      fetchedAt: Date.now(),
+      settings: appearanceSettings(raw),
+    };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
   } catch {
     /* ignore */
   }
@@ -77,7 +135,12 @@ export function bootstrapThemeAppearance(): ResolvedTheme {
 export function syncThemeAppearanceFromPublicSettings(
   raw: Record<string, unknown> | null | undefined,
 ): void {
-  if (!raw) return;
-  writeThemeSettingsCache(raw);
-  applyAppearanceFromThemeSettings(raw, resolveThemePreference());
+  if (!raw) {
+    clearThemeSettingsCache();
+    applyAppearanceFromThemeSettings({}, resolveThemePreference());
+    return;
+  }
+  const settings = appearanceSettings(raw);
+  writeThemeSettingsCache(settings);
+  applyAppearanceFromThemeSettings(settings, resolveThemePreference());
 }

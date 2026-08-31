@@ -14,6 +14,7 @@ import { useRecordSettings } from "@/hooks/useRecordSettings";
 import { zenType, zenTouch } from "@/lib/typography";
 import { zenBorder, zenText } from "@/lib/zenSemantics";
 import { useZenPresence, ZEN_MOTION_MODAL_EXIT_MS } from "@/hooks/useZenPresence";
+import { useModalA11y } from "@/hooks/useModalA11y";
 import { zenModalMotion, zenMotion } from "@/lib/zenMotion";
 
 const LatencyProbePanel = lazy(() =>
@@ -52,6 +53,7 @@ export function LatencyProbeModal({
   const requestClose = useCallback(() => {
     if (!exiting) onClose();
   }, [exiting, onClose]);
+  const dialogRef = useModalA11y(mounted, requestClose);
 
   useEffect(() => {
     if (node) setDisplayNode(node);
@@ -72,20 +74,6 @@ export function LatencyProbeModal({
     }
   }, [pingPresets, selectedPingHours]);
 
-  useEffect(() => {
-    if (!mounted) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") requestClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [mounted, requestClose]);
-
   const handleToggleProbe = (id: string) => {
     if (id === "CLEAR_ALL") {
       setSelectedProbes([]);
@@ -105,13 +93,14 @@ export function LatencyProbeModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 lg:p-8">
-      <button
-        type="button"
-        className={`absolute inset-0 bg-zen-bg/80 backdrop-blur-sm cursor-default ${motion.backdrop}`}
-        aria-label={t.btnClose}
-        onClick={requestClose}
+      <div
+        aria-hidden="true"
+        className={`absolute inset-0 bg-zen-bg/90 cursor-default ${motion.backdrop}`}
+        onMouseDown={requestClose}
       />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="latency-probe-dialog-title"
@@ -138,7 +127,7 @@ export function LatencyProbeModal({
             type="button"
             aria-label={t.btnClose}
             onClick={requestClose}
-            className={`inline-flex shrink-0 items-center justify-center rounded-full border border-zen-border-muted p-2 ${zenText.muted} hover:border-zen-accent/40 hover:text-zen-accent ${zenTouch.btn} ${zenMotion.pop} cursor-pointer`}
+            className={`zen-touch-target inline-flex shrink-0 items-center justify-center rounded-full border border-zen-border-muted p-2 ${zenText.muted} hover:border-zen-accent/40 hover:text-zen-accent ${zenTouch.btn} ${zenMotion.pop} cursor-pointer`}
           >
             <X size={18} strokeWidth={2} />
           </button>
@@ -194,7 +183,16 @@ export function LatencyProbeModal({
               </div>
             ) : null}
 
-            <Suspense fallback={null}>
+            <Suspense
+              fallback={
+                <div
+                  role="status"
+                  className="flex min-h-[28rem] items-center justify-center font-mono text-zen-fg-muted"
+                >
+                  {t.loadingData}
+                </div>
+              }
+            >
               <LatencyProbePanel
                 uuid={displayNode.id}
                 hours={selectedPingHours}

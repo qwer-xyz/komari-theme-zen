@@ -206,19 +206,20 @@ Komari installations store settings by key.
 
 ## Testing and Verification
 
-There is no dedicated unit test suite at the moment. Verification is therefore
-especially important for UI changes:
+Core data, cache, theme, sanitizer, and RPC behavior has a small Node regression
+suite. Browser verification remains especially important for UI changes:
 
 1. Run `npm run lint`.
-2. Run `npm run build` for changes that affect production output.
-3. Start `npm run dev` when visual behavior changed.
-4. Check at least one mobile viewport and one desktop viewport.
-5. Check light and dark theme behavior.
-6. Check loading, empty, offline, and data-present states when practical.
-7. For dashboard changes, verify both list and card view modes.
-8. For detail-page changes, verify an online node and the offline-node fallback.
-9. For theme-setting changes, verify default settings and the configured value.
-10. For map changes, run `npm run generate:map` and verify the generated data is
+2. Run `npm test`.
+3. Run `npm run build` for changes that affect production output.
+4. Start `npm run dev` when visual behavior changed.
+5. Check at least one mobile viewport and one desktop viewport.
+6. Check light and dark theme behavior.
+7. Check loading, empty, offline, and data-present states when practical.
+8. For dashboard changes, verify both list and card view modes.
+9. For detail-page changes, verify an online node and the offline-node fallback.
+10. For theme-setting changes, verify default settings and the configured value.
+11. For map changes, run `npm run generate:map` and verify the generated data is
     intentional.
 
 If a real Komari backend is unavailable, use code review and type/build checks,

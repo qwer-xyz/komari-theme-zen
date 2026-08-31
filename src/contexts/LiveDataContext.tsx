@@ -1,32 +1,81 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { LiveDataResponse } from "../types/LiveData";
 import { parseLivePing } from "@/lib/recordTransform";
+import { finiteNumber, nonNegativeNumber } from "@/lib/numeric";
 import { useRPC2Call } from "./RPC2Context";
+
+export type LiveDataStatus = "loading" | "fresh" | "stale" | "error";
+const LIVE_POLL_INTERVAL_MS = 2_000;
+const LIVE_FRESHNESS_MS = 8_000;
 
 interface LiveDataContextType {
   live_data: LiveDataResponse | null;
+  status: LiveDataStatus;
+  error: string | null;
+  lastSuccessAt: number | null;
+  consecutiveFailures: number;
 }
 
 const LiveDataContext = createContext<LiveDataContextType>({
   live_data: null,
+  status: "loading",
+  error: null,
+  lastSuccessAt: null,
+  consecutiveFailures: 0,
 });
 
 export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [live_data, setLiveData] = useState<LiveDataResponse | null>(null);
+  const [status, setStatus] = useState<LiveDataStatus>("loading");
+  const [error, setError] = useState<string | null>(null);
+  const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null);
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
   const { call } = useRPC2Call();
 
   useEffect(() => {
     let timer: number | undefined;
+    let freshnessTimer: number | undefined;
     let stopped = false;
     let running = false;
-    const intervalMs = 2000;
+    let requestController: AbortController | null = null;
+    let hasSuccessfulPayload = live_data !== null;
+    let lastSuccessfulReceipt = lastSuccessAt ?? 0;
+    let failureCount = 0;
+
+    const markStaleIfExpired = () => {
+      if (
+        !stopped &&
+        hasSuccessfulPayload &&
+        Date.now() - lastSuccessfulReceipt >= LIVE_FRESHNESS_MS
+      ) {
+        setStatus((current) => (current === "fresh" ? "stale" : current));
+      }
+    };
+
+    const scheduleFreshnessDeadline = () => {
+      if (freshnessTimer) window.clearTimeout(freshnessTimer);
+      const remaining = Math.max(
+        0,
+        LIVE_FRESHNESS_MS - (Date.now() - lastSuccessfulReceipt),
+      );
+      freshnessTimer = window.setTimeout(markStaleIfExpired, remaining);
+    };
 
     const scheduleNext = () => {
       if (stopped) return;
       if (typeof document !== "undefined" && document.hidden) return;
-      timer = window.setTimeout(fetchLatest, intervalMs);
+      const retryDelay = failureCount
+        ? Math.min(
+            30_000,
+            LIVE_POLL_INTERVAL_MS * 2 ** Math.min(failureCount - 1, 4),
+          )
+        : LIVE_POLL_INTERVAL_MS;
+      const delay = failureCount
+        ? Math.round(retryDelay * (0.85 + Math.random() * 0.3))
+        : retryDelay;
+      timer = window.setTimeout(fetchLatest, delay);
     };
 
     const fetchLatest = async () => {
@@ -35,47 +84,67 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
       running = true;
+      const controller = new AbortController();
+      requestController = controller;
       try {
-        const result: Record<string, Record<string, unknown>> = await call(
+        const response: unknown = await call(
           "common:getNodesLatestStatus",
           undefined,
-          { timeout: 10000 },
+          { timeout: 10000, signal: controller.signal },
+        );
+        if (!response || typeof response !== "object" || Array.isArray(response)) {
+          throw new Error("Invalid live status response");
+        }
+        const entries = Object.entries(response).filter(
+          (entry): entry is [string, Record<string, unknown>] =>
+            Boolean(entry[1]) &&
+            typeof entry[1] === "object" &&
+            !Array.isArray(entry[1]),
         );
 
-        const online = Object.values(result)
-          .filter((v) => v?.online)
-          .map((v) => String(v.client));
+        const online = entries
+          .filter(
+            ([, value]) =>
+              value.online === true ||
+              value.online === 1 ||
+              value.online === "true",
+          )
+          .map(([uuid, value]) => String(value.client ?? uuid))
+          .filter(Boolean);
 
         const dataMap: LiveDataResponse["data"]["data"] = {};
-        for (const [uuid, v] of Object.entries(result)) {
+        for (const [uuid, v] of entries) {
           dataMap[uuid] = {
-            cpu: { usage: typeof v.cpu === "number" ? v.cpu : 0 },
-            ram: { used: Number(v.ram ?? 0) },
-            swap: { used: Number(v.swap ?? 0) },
+            cpu: { usage: finiteNumber(v.cpu) },
+            ram: { used: nonNegativeNumber(v.ram) },
+            swap: { used: nonNegativeNumber(v.swap) },
             load: {
-              load1: Number(v.load ?? 0),
-              load5: Number(v.load5 ?? 0),
-              load15: Number(v.load15 ?? 0),
+              load1: finiteNumber(v.load),
+              load5: finiteNumber(v.load5),
+              load15: finiteNumber(v.load15),
             },
-            disk: { used: Number(v.disk ?? 0) },
+            disk: { used: nonNegativeNumber(v.disk) },
             network: {
-              up: Number(v.net_out ?? 0),
-              down: Number(v.net_in ?? 0),
-              totalUp: Number(v.net_total_out ?? v.net_total_up ?? 0),
-              totalDown: Number(v.net_total_in ?? v.net_total_down ?? 0),
+              up: nonNegativeNumber(v.net_out),
+              down: nonNegativeNumber(v.net_in),
+              totalUp: nonNegativeNumber(v.net_total_out ?? v.net_total_up),
+              totalDown: nonNegativeNumber(v.net_total_in ?? v.net_total_down),
             },
             connections: {
-              tcp: Number(v.connections ?? 0),
-              udp: Number(v.connections_udp ?? 0),
+              tcp: nonNegativeNumber(v.connections),
+              udp: nonNegativeNumber(v.connections_udp),
             },
             gpu:
-              v.gpu !== undefined
-                ? { count: 0, average_usage: Number(v.gpu), detailed_info: [] }
+              v.gpu !== undefined && v.gpu !== null
+                ? { count: 0, average_usage: finiteNumber(v.gpu), detailed_info: [] }
                 : undefined,
-            uptime: Number(v.uptime ?? 0),
-            process: Number(v.process ?? 0),
+            uptime: nonNegativeNumber(v.uptime),
+            process: nonNegativeNumber(v.process),
             message: "",
-            updated_at: (v.time as string | number) ?? 0,
+            updated_at:
+              typeof v.time === "string" || typeof v.time === "number"
+                ? v.time
+                : 0,
             ping: parseLivePing(v.ping),
           };
         }
@@ -84,10 +153,29 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
           data: { online, data: dataMap },
           status: "ok",
         };
-        setLiveData(live);
+        if (!stopped) {
+          const receivedAt = Date.now();
+          hasSuccessfulPayload = true;
+          lastSuccessfulReceipt = receivedAt;
+          failureCount = 0;
+          setLiveData(live);
+          setStatus("fresh");
+          setError(null);
+          setConsecutiveFailures(0);
+          setLastSuccessAt(receivedAt);
+          scheduleFreshnessDeadline();
+        }
       } catch (e) {
-        console.error("RPC2 获取最新状态失败:", e);
+        failureCount += 1;
+        if (!stopped) {
+          if (freshnessTimer) window.clearTimeout(freshnessTimer);
+          setConsecutiveFailures(failureCount);
+          setStatus(hasSuccessfulPayload ? "stale" : "error");
+          setError(e instanceof Error ? e.message : "Failed to load live data");
+        }
+        if (!stopped) console.error("RPC2 获取最新状态失败:", e);
       } finally {
+        if (requestController === controller) requestController = null;
         running = false;
         scheduleNext();
       }
@@ -95,6 +183,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const onVisibilityChange = () => {
       if (stopped || document.hidden) return;
+      markStaleIfExpired();
       if (timer) window.clearTimeout(timer);
       if (!running) {
         void fetchLatest();
@@ -102,17 +191,30 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
+    if (hasSuccessfulPayload && lastSuccessfulReceipt) {
+      scheduleFreshnessDeadline();
+    }
     fetchLatest();
 
     return () => {
       stopped = true;
+      requestController?.abort();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       if (timer) window.clearTimeout(timer);
+      if (freshnessTimer) window.clearTimeout(freshnessTimer);
     };
   }, [call]);
 
   return (
-    <LiveDataContext.Provider value={{ live_data }}>
+    <LiveDataContext.Provider
+      value={{
+        live_data,
+        status,
+        error,
+        lastSuccessAt,
+        consecutiveFailures,
+      }}
+    >
       {children}
     </LiveDataContext.Provider>
   );

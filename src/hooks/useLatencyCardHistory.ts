@@ -4,9 +4,10 @@ import { useRecordSettings } from "@/hooks/useRecordSettings";
 import { type LatencySample } from "@/lib/latencyDisplay";
 import { pingRecordsToLatencyHistory } from "@/lib/recordTransform";
 import type { PingRecordsResponse } from "@/types/records";
+import { queryCommonRecords } from "@/lib/recordQueries";
 
 const CONCURRENCY = 3;
-const POLL_MS = 60_000;
+const POLL_MS = 5 * 60_000;
 /** Enough window for card latency blocks at typical ping intervals (30–60s). */
 const HISTORY_HOURS = 1;
 
@@ -40,16 +41,17 @@ async function fetchLatencyHistories(
   const allowedTasks = new Set(taskIds);
   const entries = await mapWithConcurrency<
     string,
-    [string, LatencySample[]]
+    [string, LatencySample[]] | null
   >(
     nodeUuids,
     CONCURRENCY,
     async (uuid) => {
       try {
-        const result = await call<
-          { uuid: string; type: string; hours: number },
-          PingRecordsResponse
-        >("common:getRecords", { uuid, type: "ping", hours: HISTORY_HOURS });
+        const result = await queryCommonRecords<PingRecordsResponse>(call, {
+          uuid,
+          type: "ping",
+          hours: HISTORY_HOURS,
+        });
         const tasks = (result?.tasks ?? []).filter(
           (task) => allowedTasks.size === 0 || allowedTasks.has(task.id),
         );
@@ -63,13 +65,15 @@ async function fetchLatencyHistories(
         );
         return [uuid, samples] as [string, LatencySample[]];
       } catch {
-        return [uuid, [] as LatencySample[]];
+        return null;
       }
     },
   );
 
   const map = new Map<string, LatencySample[]>();
-  for (const [uuid, samples] of entries) {
+  for (const entry of entries) {
+    if (!entry) continue;
+    const [uuid, samples] = entry;
     map.set(uuid, samples);
   }
   return map;
@@ -112,7 +116,16 @@ export function useLatencyCardHistory(
       try {
         const map = await fetchLatencyHistories(call, nodeUuids, taskIds);
         if (cancelled) return;
-        setHistory(map);
+        setHistory((previous) => {
+          const next = new Map<string, LatencySample[]>();
+          for (const uuid of nodeUuids) {
+            if (map.has(uuid)) next.set(uuid, map.get(uuid) ?? []);
+            else if (previous.has(uuid)) {
+              next.set(uuid, previous.get(uuid) ?? []);
+            }
+          }
+          return next;
+        });
       } finally {
         running = false;
         if (!cancelled && initial) setIsLoading(false);

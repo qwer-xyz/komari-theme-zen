@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRPC2Call } from "@/contexts/RPC2Context";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import type { PingRecordsResponse } from "@/types/records";
+import { queryCommonRecords } from "@/lib/recordQueries";
 
 export function usePingRecords(
   uuid: string,
@@ -13,26 +14,37 @@ export function usePingRecords(
   const [data, setData] = useState<PingRecordsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestKeyRef = useRef("");
 
   useEffect(() => {
     if (!publicInfo?.record_enabled) {
       setData(null);
+      setIsLoading(false);
+      setError(null);
       return;
     }
 
     if (!uuid || hours <= 0) {
       setData(null);
+      setIsLoading(false);
+      setError(null);
       return;
     }
 
     let cancelled = false;
+    const requestKey = `${uuid}:${hours}:${taskIds.join(",")}`;
+    if (requestKeyRef.current !== requestKey) {
+      requestKeyRef.current = requestKey;
+      setData(null);
+    }
     setIsLoading(true);
     setError(null);
 
-    call<{ uuid: string; type: string; hours: number }, PingRecordsResponse>(
-      "common:getRecords",
-      { uuid, type: "ping", hours },
-    )
+    queryCommonRecords<PingRecordsResponse>(call, {
+      uuid,
+      type: "ping",
+      hours,
+    })
       .then((result) => {
         if (cancelled) return;
         const allowedTasks = new Set(taskIds);
@@ -51,7 +63,6 @@ export function usePingRecords(
       .catch((e: Error) => {
         if (cancelled) return;
         setError(e.message);
-        setData(null);
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);

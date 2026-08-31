@@ -22,6 +22,7 @@ export interface VPSNode {
   createdAt: string | number;
   updatedAt: string | number;
   online: boolean;
+  status: "online" | "offline" | "unknown";
   uptimeSec: number;
   cpuCores: number;
   cpuVendor: string;

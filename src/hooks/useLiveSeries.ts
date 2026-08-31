@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { VPSNode } from "@/types";
+import { timestampMs } from "@/lib/numeric";
 
 export interface LiveSample {
   t: number;
@@ -22,8 +23,6 @@ export interface LiveSample {
 
 /** Rolling window length (~5 min at a 2s cadence). */
 export const LIVE_WINDOW_POINTS = 150;
-const LIVE_INTERVAL_MS = 2000;
-
 function sampleFromNode(node: VPSNode, t: number): LiveSample {
   const pct = (used: number, total: number) =>
     total > 0 ? (used / total) * 100 : 0;
@@ -44,9 +43,8 @@ function sampleFromNode(node: VPSNode, t: number): LiveSample {
 }
 
 /**
- * Accumulates a rolling buffer of live samples from the (2s-polled) node,
- * sampled on a steady internal cadence so the buffer fills regardless of how
- * React memoizes the node object. Resets when the node changes.
+ * Accumulates only backend-originated samples. Repeated payloads do not create
+ * synthetic points with a new browser timestamp.
  */
 export function useLiveSeries(
   node: VPSNode | undefined,
@@ -54,55 +52,42 @@ export function useLiveSeries(
   capacity = LIVE_WINDOW_POINTS,
 ): LiveSample[] {
   const [samples, setSamples] = useState<LiveSample[]>([]);
-  const nodeRef = useRef(node);
-  nodeRef.current = node;
-
   const nodeId = node?.id;
+  const lastSampleKeyRef = useRef("");
 
   useEffect(() => {
     setSamples([]);
+    lastSampleKeyRef.current = "";
   }, [nodeId]);
 
   useEffect(() => {
-    if (!enabled) return;
-    let timer: number | undefined;
+    if (!enabled || !node || !node.online || document.hidden) return;
 
-    const tick = () => {
-      if (document.hidden) return;
-      const n = nodeRef.current;
-      if (!n || !n.online) return;
-      setSamples((prev) => {
-        const base =
-          prev.length >= capacity ? prev.slice(prev.length - capacity + 1) : prev;
-        return [...base, sampleFromNode(n, Date.now())];
-      });
-    };
+    const sourceTime = timestampMs(node.updatedAt);
+    if (sourceTime === null) return;
+    const sampleKey = [
+      node.id,
+      String(node.updatedAt),
+      node.cpuUsage,
+      node.memoryUsed,
+      node.swapUsed,
+      node.diskUsed,
+      node.netSpeedIn,
+      node.netSpeedOut,
+      node.tcpConnections,
+      node.udpConnections,
+      node.processesCount,
+      node.systemLoad1,
+    ].join(":");
+    if (lastSampleKeyRef.current === sampleKey) return;
+    lastSampleKeyRef.current = sampleKey;
 
-    const scheduleNext = () => {
-      if (document.hidden) return;
-      timer = window.setTimeout(() => {
-        tick();
-        scheduleNext();
-      }, LIVE_INTERVAL_MS);
-    };
-
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        if (timer) window.clearTimeout(timer);
-        return;
-      }
-      tick();
-      scheduleNext();
-    };
-
-    tick();
-    scheduleNext();
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      if (timer) window.clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [enabled, nodeId, capacity]);
+    setSamples((prev) => {
+      const base =
+        prev.length >= capacity ? prev.slice(prev.length - capacity + 1) : prev;
+      return [...base, sampleFromNode(node, sourceTime)];
+    });
+  }, [enabled, node, capacity]);
 
   return samples;
 }

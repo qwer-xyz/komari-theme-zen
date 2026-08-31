@@ -15,6 +15,7 @@ export type SlidingRect = {
 export function useSlidingIndicator(activeKey: string) {
   const rootRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef(new Map<string, HTMLElement>());
+  const measureFrameRef = useRef<number | null>(null);
   const [rect, setRect] = useState<SlidingRect | null>(null);
 
   const register = useCallback(
@@ -25,7 +26,7 @@ export function useSlidingIndicator(activeKey: string) {
     [],
   );
 
-  const measure = useCallback(() => {
+  const measureNow = useCallback(() => {
     const root = rootRef.current;
     const node = itemRefs.current.get(activeKey);
     if (!root || !node) {
@@ -35,16 +36,33 @@ export function useSlidingIndicator(activeKey: string) {
 
     const rootBox = root.getBoundingClientRect();
     const nodeBox = node.getBoundingClientRect();
-    setRect({
+    const next = {
       left: nodeBox.left - rootBox.left + root.scrollLeft,
       top: nodeBox.top - rootBox.top + root.scrollTop,
       width: nodeBox.width,
       height: nodeBox.height,
-    });
+    };
+    setRect((previous) =>
+      previous &&
+      previous.left === next.left &&
+      previous.top === next.top &&
+      previous.width === next.width &&
+      previous.height === next.height
+        ? previous
+        : next,
+    );
   }, [activeKey]);
 
+  const measure = useCallback(() => {
+    if (measureFrameRef.current !== null) return;
+    measureFrameRef.current = window.requestAnimationFrame(() => {
+      measureFrameRef.current = null;
+      measureNow();
+    });
+  }, [measureNow]);
+
   useLayoutEffect(() => {
-    measure();
+    measureNow();
 
     const root = rootRef.current;
     if (!root) return;
@@ -58,10 +76,14 @@ export function useSlidingIndicator(activeKey: string) {
 
     return () => {
       ro.disconnect();
+      if (measureFrameRef.current !== null) {
+        window.cancelAnimationFrame(measureFrameRef.current);
+        measureFrameRef.current = null;
+      }
       root.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
     };
-  }, [activeKey, measure]);
+  }, [activeKey, measure, measureNow]);
 
   return { rootRef, register, rect, measure };
 }

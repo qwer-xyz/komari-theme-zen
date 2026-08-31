@@ -1,5 +1,6 @@
 import React from "react";
 import { useRPC2Call } from "./RPC2Context";
+import { finiteNumber, nonNegativeNumber } from "@/lib/numeric";
 
 export type NodeBasicInfo = {
   uuid: string;
@@ -30,8 +31,6 @@ export type NodeBasicInfo = {
   expired_at: string;
   created_at: string;
   updated_at: string;
-  ipv4?: string;
-  ipv6?: string;
 };
 
 interface NodeListContextType {
@@ -52,41 +51,59 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const { call } = useRPC2Call();
+  const runningRef = React.useRef(false);
+  const hasLoadedRef = React.useRef(false);
+  const lastSuccessAtRef = React.useRef(0);
 
-  const refresh = () => {
+  const refresh = React.useCallback(() => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setError(null);
+    if (!hasLoadedRef.current) setIsLoading(true);
     call<unknown, Record<string, Record<string, unknown>>>(
       "common:getNodes",
       undefined,
       { timeout: 15000 },
     )
       .then((result) => {
-        if (!result || typeof result !== "object") {
-          setNodeList([]);
-          return;
+        if (!result || typeof result !== "object" || Array.isArray(result)) {
+          throw new Error("Invalid node list response");
         }
 
-        const list: NodeBasicInfo[] = Object.values(result).map((raw) => {
+        const seen = new Set<string>();
+        const list: NodeBasicInfo[] = Object.values(result).flatMap((raw) => {
+          if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
           const n = raw as Record<string, unknown>;
-          return {
-          uuid: String(n.uuid ?? ""),
+          const uuid = String(n.uuid ?? "").trim();
+          if (!uuid || seen.has(uuid)) return [];
+          seen.add(uuid);
+
+          const trafficLimitType = ["sum", "max", "min", "up", "down"].includes(
+            String(n.traffic_limit_type),
+          )
+            ? (String(n.traffic_limit_type) as NodeBasicInfo["traffic_limit_type"])
+            : undefined;
+
+          return [{
+          uuid,
           name: String(n.name ?? ""),
           cpu_name: String(n.cpu_name ?? ""),
           virtualization: String(n.virtualization ?? ""),
           arch: String(n.arch ?? ""),
-          cpu_cores: Number(n.cpu_cores ?? 0),
+          cpu_cores: nonNegativeNumber(n.cpu_cores),
           os: String(n.os ?? ""),
           kernel_version: String(n.kernel_version ?? ""),
           gpu_name: String(n.gpu_name ?? ""),
           region: String(n.region ?? ""),
-          mem_total: Number(n.mem_total ?? 0),
-          swap_total: Number(n.swap_total ?? 0),
-          disk_total: Number(n.disk_total ?? 0),
+          mem_total: nonNegativeNumber(n.mem_total),
+          swap_total: nonNegativeNumber(n.swap_total),
+          disk_total: nonNegativeNumber(n.disk_total),
           version: String(n.version ?? ""),
-          weight: Number(n.weight ?? 0),
-          price: Number(n.price ?? 0),
+          weight: finiteNumber(n.weight),
+          // Komari uses -1 sentinels for free / one-time billing semantics.
+          price: finiteNumber(n.price),
           tags: String(n.tags ?? ""),
-          billing_cycle: Number(n.billing_cycle ?? 0),
+          billing_cycle: finiteNumber(n.billing_cycle),
           auto_renewal:
             typeof n.auto_renewal === "boolean"
               ? n.auto_renewal
@@ -97,29 +114,45 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
           group: String(n.group ?? ""),
           remark: String(n.remark ?? ""),
           public_remark: String(n.public_remark ?? ""),
-          traffic_limit: Number(n.traffic_limit ?? 0),
-          traffic_limit_type: n.traffic_limit_type as NodeBasicInfo["traffic_limit_type"],
+          traffic_limit: nonNegativeNumber(n.traffic_limit),
+          traffic_limit_type: trafficLimitType,
           expired_at: String(n.expired_at ?? ""),
           created_at: String(n.created_at ?? ""),
           updated_at: String(n.updated_at ?? ""),
-          ipv4: n.ipv4 ? String(n.ipv4) : undefined,
-          ipv6: n.ipv6 ? String(n.ipv6) : undefined,
-          };
+          }];
         });
         setNodeList(list);
+        hasLoadedRef.current = true;
+        lastSuccessAtRef.current = Date.now();
       })
       .catch((err: Error) => {
         setError(err?.message || "An error occurred while fetching data");
-        setNodeList([]);
       })
       .finally(() => {
+        runningRef.current = false;
         setIsLoading(false);
       });
-  };
+  }, [call]);
 
   React.useEffect(() => {
     refresh();
-  }, []);
+    const interval = window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, 5 * 60_000);
+    const onVisibilityChange = () => {
+      if (
+        !document.hidden &&
+        Date.now() - lastSuccessAtRef.current > 60_000
+      ) {
+        refresh();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [refresh]);
 
   return (
     <NodeListContext.Provider value={{ nodeList, isLoading, error, refresh }}>

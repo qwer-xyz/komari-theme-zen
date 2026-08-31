@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { prefetchPublicInfo } from "@/lib/prefetchPublicInfo";
@@ -44,29 +45,31 @@ export const PublicInfoProvider: React.FC<{ children: React.ReactNode }> = ({
   const [publicInfo, setPublicInfo] = useState<PublicInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestVersionRef = useRef(0);
 
   const load = useCallback((force: boolean) => {
+    const requestVersion = ++requestVersionRef.current;
     setError(null);
     setIsLoading(true);
 
     return prefetchPublicInfo(force)
       .then((data) => {
+        if (requestVersion !== requestVersionRef.current) return;
         if (!data) {
-          setError("获取公开信息失败");
-          setPublicInfo(null);
+          setError("Public information unavailable");
           return;
         }
         setPublicInfo(data);
-        if (data?.theme_settings && typeof data.theme_settings === "object") {
-          syncThemeAppearanceFromPublicSettings(data.theme_settings);
-        }
+        syncThemeAppearanceFromPublicSettings(data.theme_settings);
       })
       .catch((err: Error) => {
-        setError(err.message || "获取公开信息失败");
-        setPublicInfo(null);
+        if (requestVersion !== requestVersionRef.current) return;
+        setError(err.message || "Public information unavailable");
       })
       .finally(() => {
-        setIsLoading(false);
+        if (requestVersion === requestVersionRef.current) {
+          setIsLoading(false);
+        }
       });
   }, []);
 

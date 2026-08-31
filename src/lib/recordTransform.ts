@@ -9,6 +9,7 @@ import type {
 import { hoursToChartLength } from "@/lib/timeRangePresets";
 import type { VPSNode } from "@/types";
 import { bytesToGb } from "@/lib/komariMapper";
+import { timestampMs } from "@/lib/numeric";
 import {
   LATENCY_HISTORY_LEN,
   type LatencySample,
@@ -242,11 +243,14 @@ export function alignLoadRecordsToChart(
     return Array(targetLen).fill(null);
   }
 
-  const sorted = [...records].sort(
-    (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
-  );
+  const sorted = records
+    .filter((record) => timestampMs(record.time) !== null)
+    .sort(
+      (a, b) => (timestampMs(a.time) ?? 0) - (timestampMs(b.time) ?? 0),
+    );
+  if (sorted.length === 0) return Array(targetLen).fill(null);
 
-  const lastMs = new Date(sorted[sorted.length - 1].time).getTime();
+  const lastMs = timestampMs(sorted[sorted.length - 1].time)!;
   const endMs = lastMs;
   const startMs = endMs - rangeHours * 3600 * 1000;
   const span = endMs - startMs;
@@ -255,7 +259,8 @@ export function alignLoadRecordsToChart(
   const buckets: number[][] = Array.from({ length: targetLen }, () => []);
 
   for (const rec of sorted) {
-    const ts = new Date(rec.time).getTime();
+    const ts = timestampMs(rec.time);
+    if (ts === null) continue;
     if (ts < startMs || ts > endMs) continue;
     const idx = Math.min(
       targetLen - 1,
@@ -370,6 +375,114 @@ export function buildMetricHistory(
   }
 
   return { values: Array(targetLen).fill(0), hasData: false };
+}
+
+const ALL_METRIC_KEYS: readonly MetricKey[] = [
+  "cpu",
+  "load1",
+  "mem",
+  "swap",
+  "disk",
+  "netin",
+  "netout",
+  "tcp",
+  "udp",
+  "processes",
+  "temp",
+];
+
+/** Build every detail metric in one sort and one record scan. */
+export function buildAllMetricHistories(
+  hours: number,
+  totals: LoadTotals,
+  loadRecords: LoadRecord[],
+  recentRecords: LiveRecord[],
+): Record<MetricKey, MetricHistoryResult> {
+  const targetLen = hoursToChartLength(hours);
+  const emptyResult = () => ({
+    values: Array<number | null>(targetLen).fill(0),
+    hasData: false,
+  });
+  const results = Object.fromEntries(
+    ALL_METRIC_KEYS.map((metric) => [metric, emptyResult()]),
+  ) as Record<MetricKey, MetricHistoryResult>;
+
+  const sortedRecords = loadRecords
+    .map((record) => ({ record, time: timestampMs(record.time) }))
+    .filter(
+      (entry): entry is { record: LoadRecord; time: number } =>
+        entry.time !== null,
+    )
+    .sort((a, b) => a.time - b.time);
+
+  if (sortedRecords.length > 0) {
+    const endMs = sortedRecords[sortedRecords.length - 1].time;
+    const startMs = endMs - hours * 3600 * 1000;
+    const slotMs = Math.max(1, (endMs - startMs) / Math.max(1, targetLen));
+    const buckets = Object.fromEntries(
+      ALL_METRIC_KEYS.map((metric) => [
+        metric,
+        Array.from({ length: targetLen }, () => ({ sum: 0, count: 0 })),
+      ]),
+    ) as Record<MetricKey, Array<{ sum: number; count: number }>>;
+
+    for (const { record, time } of sortedRecords) {
+      if (time < startMs || time > endMs) continue;
+      const index = Math.min(
+        targetLen - 1,
+        Math.max(0, Math.floor((time - startMs) / slotMs)),
+      );
+      for (const metric of ALL_METRIC_KEYS) {
+        const value = loadMetricValue(record, metric, totals);
+        if (!Number.isFinite(value)) continue;
+        buckets[metric][index].sum += value;
+        buckets[metric][index].count += 1;
+      }
+    }
+
+    for (const metric of ALL_METRIC_KEYS) {
+      const values = buckets[metric].map((bucket) =>
+        bucket.count > 0 ? bucket.sum / bucket.count : null,
+      );
+      results[metric] = {
+        values,
+        hasData:
+          values.some((value) => value != null && value > 0) ||
+          sortedRecords.length > 0,
+      };
+    }
+    return results;
+  }
+
+  if (hours <= 24 && recentRecords.length > 0) {
+    const recentMetrics: MetricKey[] = [
+      "cpu",
+      "mem",
+      "netin",
+      "netout",
+      "load1",
+    ];
+    const series = Object.fromEntries(
+      recentMetrics.map((metric) => [metric, [] as number[]]),
+    ) as Partial<Record<MetricKey, number[]>>;
+    for (const record of recentRecords) {
+      for (const metric of recentMetrics) {
+        series[metric]!.push(recentMetricValue(record, metric, totals));
+      }
+    }
+    for (const metric of recentMetrics) {
+      const values = series[metric]!;
+      results[metric] = {
+        values: padSeriesLeft(
+          downsampleSeries(values, Math.min(values.length, targetLen)),
+          targetLen,
+        ),
+        hasData: values.length > 0,
+      };
+    }
+  }
+
+  return results;
 }
 
 function averagePositive(values: number[]): number {
@@ -492,7 +605,8 @@ export function groupPingRecordsByTime(
   const anchors: number[] = [];
 
   for (const rec of records) {
-    const ts = new Date(rec.time).getTime();
+    const ts = timestampMs(rec.time);
+    if (ts === null) continue;
     let anchor: number | null = null;
     for (const a of anchors) {
       if (Math.abs(a - ts) <= toleranceMs) {

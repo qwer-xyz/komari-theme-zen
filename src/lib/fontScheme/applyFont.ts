@@ -2,6 +2,7 @@ import type { ResolvedFontScheme } from "./resolveFont";
 import { FONT_CSS_VAR_KEYS } from "./tokens";
 
 const FONT_LINK_ATTR = "data-zen-font";
+let appliedSignature = "";
 
 function removeFontAssets(): void {
   document
@@ -11,7 +12,10 @@ function removeFontAssets(): void {
 
 function ensurePreconnect(hrefs: string[]): void {
   for (const href of hrefs) {
-    if (document.querySelector(`link[rel="preconnect"][href="${href}"]`)) {
+    const exists = Array.from(
+      document.querySelectorAll<HTMLLinkElement>('link[rel="preconnect"]'),
+    ).some((link) => link.href === new URL(href, document.baseURI).href);
+    if (exists) {
       continue;
     }
     const link = document.createElement("link");
@@ -37,6 +41,15 @@ function ensureStylesheets(urls: string[]): void {
 
 export function applyFontScheme(scheme: ResolvedFontScheme): void {
   const root = document.documentElement;
+  const signature = JSON.stringify({
+    preconnect: scheme.preconnect,
+    cssUrls: scheme.cssUrls,
+    sans: scheme["--font-sans"],
+    mono: scheme["--font-mono"],
+  });
+
+  if (signature === appliedSignature) return;
+  appliedSignature = signature;
 
   removeFontAssets();
   ensurePreconnect(scheme.preconnect);

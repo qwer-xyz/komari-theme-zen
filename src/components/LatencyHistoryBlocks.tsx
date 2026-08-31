@@ -27,6 +27,7 @@ interface LatencyHistoryBlocksProps {
   className?: string;
   /** Open full latency probe panel (e.g. from node table). */
   onValueClick?: () => void;
+  historyLabel: (count: number) => string;
 }
 
 const VIEWPORT_PAD = 8;
@@ -63,6 +64,8 @@ type LatencyBlockProps = {
   theme: "light" | "dark";
   colorConfig: LatencyColorConfig;
   mean: number | null;
+  optionId: string;
+  selected: boolean;
   setTriggerRef: (el: HTMLSpanElement | null) => void;
   onShow: () => void;
   onHide: () => void;
@@ -74,6 +77,8 @@ function LatencyBlock({
   theme,
   colorConfig,
   mean,
+  optionId,
+  selected,
   setTriggerRef,
   onShow,
   onHide,
@@ -96,26 +101,17 @@ function LatencyBlock({
 
   return (
     <span
+      id={hasData ? optionId : undefined}
       ref={setTriggerRef}
-      role={hasData ? "button" : undefined}
-      tabIndex={hasData ? 0 : undefined}
+      role={hasData ? "option" : undefined}
+      aria-selected={hasData ? selected : undefined}
       aria-label={hasData ? tipText : undefined}
+      aria-hidden={hasData ? undefined : true}
+      title={hasData ? tipText : undefined}
       className={`flex h-full min-w-0 items-end ${hasData ? "cursor-pointer" : "cursor-default"}`}
       onMouseEnter={hasData ? onShow : undefined}
       onMouseLeave={hasData ? onHide : undefined}
-      onFocus={hasData ? onShow : undefined}
-      onBlur={hasData ? onHide : undefined}
       onClick={hasData ? onTogglePinned : undefined}
-      onKeyDown={
-        hasData
-          ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onTogglePinned(event);
-              }
-            }
-          : undefined
-      }
     >
       <span
         aria-hidden
@@ -253,12 +249,21 @@ export function LatencyHistoryBlocks({
   colorConfig,
   className = "",
   onValueClick,
+  historyLabel,
 }: LatencyHistoryBlocksProps) {
   const blocks = React.useMemo(() => padLatencyHistory(samples), [samples]);
   const mean = React.useMemo(() => computeLatencyMean(blocks), [blocks]);
   const triggerRefs = React.useRef<(HTMLSpanElement | null)[]>([]);
   const [activeTooltip, setActiveTooltip] =
     React.useState<ActiveTooltip | null>(null);
+  const historyId = React.useId();
+  const visibleIndexes = React.useMemo(
+    () =>
+      blocks.flatMap((sample, index) =>
+        isLatencySampleVisible(sample) ? [index] : [],
+      ),
+    [blocks],
+  );
 
   React.useEffect(() => {
     triggerRefs.current.length = blocks.length;
@@ -293,6 +298,37 @@ export function LatencyHistoryBlocks({
       );
     },
     [blocks],
+  );
+
+  const handleHistoryKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLSpanElement>) => {
+      if (visibleIndexes.length === 0) return;
+      const currentPosition = Math.max(
+        0,
+        visibleIndexes.indexOf(
+          activeTooltip?.index ?? visibleIndexes[visibleIndexes.length - 1],
+        ),
+      );
+      let nextPosition = currentPosition;
+      if (event.key === "ArrowLeft") nextPosition = currentPosition - 1;
+      else if (event.key === "ArrowRight") nextPosition = currentPosition + 1;
+      else if (event.key === "Home") nextPosition = 0;
+      else if (event.key === "End") nextPosition = visibleIndexes.length - 1;
+      else if (event.key === "Escape") {
+        event.preventDefault();
+        closeTooltip();
+        return;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      nextPosition = Math.max(
+        0,
+        Math.min(visibleIndexes.length - 1, nextPosition),
+      );
+      setActiveTooltip({ index: visibleIndexes[nextPosition], pinned: false });
+    },
+    [activeTooltip?.index, closeTooltip, visibleIndexes],
   );
 
   const valueColor =
@@ -335,6 +371,25 @@ export function LatencyHistoryBlocks({
       </span>
       <MetricBarTrack>
         <span
+          role="listbox"
+          aria-label={historyLabel(visibleIndexes.length)}
+          aria-orientation="horizontal"
+          aria-activedescendant={
+            activeTooltip && isLatencySampleVisible(blocks[activeTooltip.index])
+              ? `${historyId}-sample-${activeTooltip.index}`
+              : undefined
+          }
+          tabIndex={visibleIndexes.length > 0 ? 0 : -1}
+          onFocus={() => {
+            if (!activeTooltip && visibleIndexes.length > 0) {
+              setActiveTooltip({
+                index: visibleIndexes[visibleIndexes.length - 1],
+                pinned: false,
+              });
+            }
+          }}
+          onBlur={closeTooltip}
+          onKeyDown={handleHistoryKeyDown}
           className="grid h-full w-full gap-px"
           style={{
             gridTemplateColumns: `repeat(${LATENCY_HISTORY_LEN}, minmax(0, 1fr))`,
@@ -347,6 +402,8 @@ export function LatencyHistoryBlocks({
               theme={theme}
               colorConfig={colorConfig}
               mean={mean}
+              optionId={`${historyId}-sample-${i}`}
+              selected={activeTooltip?.index === i}
               setTriggerRef={(el) => {
                 triggerRefs.current[i] = el;
               }}
