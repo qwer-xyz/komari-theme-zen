@@ -54,6 +54,7 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
   const runningRef = React.useRef(false);
   const hasLoadedRef = React.useRef(false);
   const lastSuccessAtRef = React.useRef(0);
+  const failureCountRef = React.useRef(0);
 
   const refresh = React.useCallback(() => {
     if (runningRef.current) return;
@@ -81,51 +82,57 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
           const trafficLimitType = ["sum", "max", "min", "up", "down"].includes(
             String(n.traffic_limit_type),
           )
-            ? (String(n.traffic_limit_type) as NodeBasicInfo["traffic_limit_type"])
+            ? (String(
+                n.traffic_limit_type,
+              ) as NodeBasicInfo["traffic_limit_type"])
             : undefined;
 
-          return [{
-          uuid,
-          name: String(n.name ?? ""),
-          cpu_name: String(n.cpu_name ?? ""),
-          virtualization: String(n.virtualization ?? ""),
-          arch: String(n.arch ?? ""),
-          cpu_cores: nonNegativeNumber(n.cpu_cores),
-          os: String(n.os ?? ""),
-          kernel_version: String(n.kernel_version ?? ""),
-          gpu_name: String(n.gpu_name ?? ""),
-          region: String(n.region ?? ""),
-          mem_total: nonNegativeNumber(n.mem_total),
-          swap_total: nonNegativeNumber(n.swap_total),
-          disk_total: nonNegativeNumber(n.disk_total),
-          version: String(n.version ?? ""),
-          weight: finiteNumber(n.weight),
-          // Komari uses -1 sentinels for free / one-time billing semantics.
-          price: finiteNumber(n.price),
-          tags: String(n.tags ?? ""),
-          billing_cycle: finiteNumber(n.billing_cycle),
-          auto_renewal:
-            typeof n.auto_renewal === "boolean"
-              ? n.auto_renewal
-              : typeof n.autoRenewal === "boolean"
-                ? n.autoRenewal
-                : undefined,
-          currency: String(n.currency ?? ""),
-          group: String(n.group ?? ""),
-          remark: String(n.remark ?? ""),
-          public_remark: String(n.public_remark ?? ""),
-          traffic_limit: nonNegativeNumber(n.traffic_limit),
-          traffic_limit_type: trafficLimitType,
-          expired_at: String(n.expired_at ?? ""),
-          created_at: String(n.created_at ?? ""),
-          updated_at: String(n.updated_at ?? ""),
-          }];
+          return [
+            {
+              uuid,
+              name: String(n.name ?? ""),
+              cpu_name: String(n.cpu_name ?? ""),
+              virtualization: String(n.virtualization ?? ""),
+              arch: String(n.arch ?? ""),
+              cpu_cores: nonNegativeNumber(n.cpu_cores),
+              os: String(n.os ?? ""),
+              kernel_version: String(n.kernel_version ?? ""),
+              gpu_name: String(n.gpu_name ?? ""),
+              region: String(n.region ?? ""),
+              mem_total: nonNegativeNumber(n.mem_total),
+              swap_total: nonNegativeNumber(n.swap_total),
+              disk_total: nonNegativeNumber(n.disk_total),
+              version: String(n.version ?? ""),
+              weight: finiteNumber(n.weight),
+              // Komari uses -1 sentinels for free / one-time billing semantics.
+              price: finiteNumber(n.price),
+              tags: String(n.tags ?? ""),
+              billing_cycle: finiteNumber(n.billing_cycle),
+              auto_renewal:
+                typeof n.auto_renewal === "boolean"
+                  ? n.auto_renewal
+                  : typeof n.autoRenewal === "boolean"
+                    ? n.autoRenewal
+                    : undefined,
+              currency: String(n.currency ?? ""),
+              group: String(n.group ?? ""),
+              remark: String(n.remark ?? ""),
+              public_remark: String(n.public_remark ?? ""),
+              traffic_limit: nonNegativeNumber(n.traffic_limit),
+              traffic_limit_type: trafficLimitType,
+              expired_at: String(n.expired_at ?? ""),
+              created_at: String(n.created_at ?? ""),
+              updated_at: String(n.updated_at ?? ""),
+            },
+          ];
         });
+        failureCountRef.current = 0;
         setNodeList(list);
         hasLoadedRef.current = true;
         lastSuccessAtRef.current = Date.now();
       })
       .catch((err: Error) => {
+        failureCountRef.current++;
         setError(err?.message || "An error occurred while fetching data");
       })
       .finally(() => {
@@ -140,10 +147,7 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!document.hidden) refresh();
     }, 5 * 60_000);
     const onVisibilityChange = () => {
-      if (
-        !document.hidden &&
-        Date.now() - lastSuccessAtRef.current > 60_000
-      ) {
+      if (!document.hidden && Date.now() - lastSuccessAtRef.current > 60_000) {
         refresh();
       }
     };
@@ -153,6 +157,17 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [refresh]);
+
+  React.useEffect(() => {
+    if (!error) return;
+    const delay =
+      Math.min(30_000, 2_000 * 2 ** Math.min(4, failureCountRef.current - 1)) *
+      (0.85 + Math.random() * 0.3);
+    const timer = window.setTimeout(() => {
+      if (!document.hidden) refresh();
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [error, refresh]);
 
   return (
     <NodeListContext.Provider value={{ nodeList, isLoading, error, refresh }}>

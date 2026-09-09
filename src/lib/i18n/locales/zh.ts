@@ -154,6 +154,13 @@ export const zh = {
   errorCheckEnv: "请检查 .env.development 中的 VITE_API_TARGET",
   liveDataStale: "实时更新已延迟，当前显示最后一次收到的数据。",
   liveDataUnavailable: "暂时无法获取实时状态，节点状态目前未知。",
+  errorSection: "此区域加载失败。",
+  errorHistory: "历史数据刷新失败。",
+  reloadPage: "重新加载页面",
+  previousPage: "上一页",
+  nextPage: "下一页",
+  nodePages: "节点分页",
+  residualNoConversion: "无需换算",
   retry: "重试",
   statusUnknown: "未知",
   clearSearch: "清除搜索",
@@ -207,5 +214,6 @@ export const zh = {
   mapScrollHint: "左右滑动",
   mapExpandHint: "点击展开",
   btnClose: "关闭",
-  mapRegionTooltip: (code, online, total) => `${code} · ${online}/${total} 在线`,
+  mapRegionTooltip: (code, online, total) =>
+    `${code} · ${online}/${total} 在线`,
 } satisfies Messages;

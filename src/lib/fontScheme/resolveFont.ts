@@ -15,7 +15,7 @@ const FALLBACK_SANS = FONT_PRESETS.Default.sans;
 const FALLBACK_MONO = FONT_PRESETS.Default.mono;
 
 export function normalizeFontPresetId(raw: string): FontPresetId {
-  if (raw in FONT_PRESETS) return raw as FontPresetId;
+  if (Object.hasOwn(FONT_PRESETS, raw)) return raw as FontPresetId;
   return DEFAULT_FONT_PRESET_ID;
 }
 
@@ -38,8 +38,8 @@ export function resolveFontScheme(
     return {
       [FONT_CSS_VAR_KEYS.sans]: stack,
       [FONT_CSS_VAR_KEYS.mono]: monoStack,
-      cssUrls: cssUrl ? [cssUrl] : FONT_PRESETS.Default.cssUrls.slice(),
-      preconnect: cssUrl ? [] : (FONT_PRESETS.Default.preconnect?.slice() ?? []),
+      cssUrls: cssUrl ? [cssUrl] : [],
+      preconnect: [],
     };
   }
 

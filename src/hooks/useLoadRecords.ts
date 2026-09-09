@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRPC2Call } from "@/contexts/RPC2Context";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import type {
@@ -11,7 +11,11 @@ import {
   isRpcMethodUnsupported,
   noteRpcMethodFailure,
 } from "@/lib/rpcCapability";
-import { queryCommonRecords } from "@/lib/recordQueries";
+import {
+  fetchLegacyLoadRecords,
+  queryRecords,
+  queryCommonRecords,
+} from "@/lib/recordQueries";
 import { timestampMs } from "@/lib/numeric";
 
 const PUBLIC_RECORDS_METHOD = "public:getRecordsByUUID";
@@ -31,6 +35,7 @@ function normalizeResponse(raw: LoadRecordsResponse | undefined) {
     ? sortedRecordsByTime(raw.records)
     : [];
   const gpuDevices = Object.values(raw?.gpu_devices ?? {})
+    .filter((device) => device && typeof device === "object")
     .map((device) => ({
       ...device,
       records: Array.isArray(device.records)
@@ -51,6 +56,9 @@ export function useLoadRecords(uuid: string, hours: number) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestKeyRef = useRef("");
+  const [settledKey, setSettledKey] = useState("");
+  const [retryVersion, setRetryVersion] = useState(0);
+  const retry = useCallback(() => setRetryVersion((v) => v + 1), []);
 
   useEffect(() => {
     if (!publicInfo?.record_enabled) {
@@ -78,6 +86,7 @@ export function useLoadRecords(uuid: string, hours: number) {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     const requestKey = `${uuid}:${hours}`;
     if (requestKeyRef.current !== requestKey) {
       requestKeyRef.current = requestKey;
@@ -92,9 +101,11 @@ export function useLoadRecords(uuid: string, hours: number) {
         let result: LoadRecordsResponse | undefined;
         if (canTryRpcMethod(PUBLIC_RECORDS_METHOD)) {
           try {
-            result = await call<unknown, LoadRecordsResponse>(
+            result = await queryRecords<LoadRecordsResponse>(
+              call,
               PUBLIC_RECORDS_METHOD,
               { uuid, load_type: "all", hours: String(hours) },
+              controller.signal,
             );
           } catch (error) {
             if (!noteRpcMethodFailure(PUBLIC_RECORDS_METHOD, error)) {
@@ -102,12 +113,17 @@ export function useLoadRecords(uuid: string, hours: number) {
             }
           }
         }
+        if (cancelled) return;
         if (!result) {
-          result = await queryCommonRecords<LoadRecordsResponse>(call, {
-            uuid,
-            type: "load",
-            hours,
-          });
+          result = await queryCommonRecords<LoadRecordsResponse>(
+            call,
+            {
+              uuid,
+              type: "load",
+              hours,
+            },
+            controller.signal,
+          );
         }
 
         if (cancelled) return;
@@ -115,6 +131,7 @@ export function useLoadRecords(uuid: string, hours: number) {
         setRecords(normalized.records);
         setGpuDevices(normalized.gpuDevices);
       } catch (rpcErr) {
+        if (cancelled) return;
         if (!isRpcMethodUnsupported(rpcErr)) {
           if (!cancelled) {
             setError(
@@ -124,13 +141,13 @@ export function useLoadRecords(uuid: string, hours: number) {
           return;
         }
         try {
-          const res = await fetch(
-            `/api/records/load?uuid=${encodeURIComponent(uuid)}&hours=${hours}`,
-            { signal: AbortSignal.timeout(15_000) },
+          const normalized = normalizeResponse(
+            await fetchLegacyLoadRecords<LoadRecordsResponse>(
+              uuid,
+              hours,
+              controller.signal,
+            ),
           );
-          if (!res.ok) throw rpcErr;
-          const json = await res.json();
-          const normalized = normalizeResponse(json.data as LoadRecordsResponse);
           if (!cancelled) {
             setRecords(normalized.records);
             setGpuDevices(normalized.gpuDevices);
@@ -143,7 +160,10 @@ export function useLoadRecords(uuid: string, hours: number) {
           }
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          setSettledKey(requestKey);
+        }
       }
     };
 
@@ -151,8 +171,17 @@ export function useLoadRecords(uuid: string, hours: number) {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [uuid, hours, maxHours, call, publicInfo?.record_enabled]);
+  }, [uuid, hours, maxHours, call, publicInfo?.record_enabled, retryVersion]);
 
-  return { records, gpuDevices, isLoading, error, maxHours };
+  return {
+    records,
+    gpuDevices,
+    isLoading,
+    error,
+    retry,
+    maxHours,
+    hasLoaded: settledKey === `${uuid}:${hours}`,
+  };
 }

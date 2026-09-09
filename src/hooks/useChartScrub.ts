@@ -6,6 +6,7 @@ export type ChartScrubConfig = {
   paddingX: number;
   chartWidth: number;
   dataLength: number;
+  timestamps?: number[];
 };
 
 export type TimeChartScrubConfig = {
@@ -27,6 +28,24 @@ export function indexFromClientX(
   const x = clientX - svgRect.left;
   const svgX = (x / svgRect.width) * width;
   const chartRatio = (svgX - paddingX) / chartWidth;
+  const times = config.timestamps;
+  if (
+    times?.length === dataLength &&
+    dataLength > 1 &&
+    times.at(-1)! > times[0]
+  ) {
+    const time =
+      times[0] +
+      Math.max(0, Math.min(1, chartRatio)) * (times.at(-1)! - times[0]);
+    let lo = 0,
+      hi = times.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (times[mid] < time) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo > 0 && time - times[lo - 1] <= times[lo] - time ? lo - 1 : lo;
+  }
   return Math.max(
     0,
     Math.min(dataLength - 1, Math.round(chartRatio * (dataLength - 1))),
@@ -108,6 +127,20 @@ export function useTimeChartScrub(
 ) {
   const [hoveredTime, setHoveredTime] = React.useState<number | null>(null);
 
+  const frame = React.useRef<number | null>(null);
+  const pendingTime = React.useRef<number | null>(null);
+  React.useEffect(
+    () => () => {
+      if (frame.current != null) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
+  const clearHover = React.useCallback(() => {
+    if (frame.current != null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    setHoveredTime(null);
+  }, []);
+  React.useEffect(clearHover, [config, clearHover]);
   const updateFromClientX = React.useCallback(
     (clientX: number) => {
       const container = containerRef.current;
@@ -115,9 +148,12 @@ export function useTimeChartScrub(
       const svgEl = container.querySelector("svg[data-chart-main]");
       if (!svgEl || !(svgEl instanceof SVGSVGElement)) return;
       const nextTime = timeFromClientX(clientX, svgEl, config);
-      setHoveredTime((prev) =>
-        prev !== null && Math.abs(prev - nextTime) < 1 ? prev : nextTime,
-      );
+      pendingTime.current = nextTime;
+      if (frame.current == null)
+        frame.current = requestAnimationFrame(() => {
+          frame.current = null;
+          setHoveredTime(pendingTime.current);
+        });
     },
     [containerRef, config],
   );
@@ -127,7 +163,7 @@ export function useTimeChartScrub(
     [updateFromClientX],
   );
 
-  const onMouseLeave = React.useCallback(() => setHoveredTime(null), []);
+  const onMouseLeave = clearHover;
 
   const onTouchStart = React.useCallback(
     (e: React.TouchEvent) => {
@@ -143,7 +179,7 @@ export function useTimeChartScrub(
     [updateFromClientX],
   );
 
-  const onTouchEnd = React.useCallback(() => setHoveredTime(null), []);
+  const onTouchEnd = clearHover;
 
   return {
     hoveredTime,

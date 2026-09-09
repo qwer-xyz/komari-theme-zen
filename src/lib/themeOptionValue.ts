@@ -41,6 +41,7 @@ const THEME_OPTION_VALUE_MAP: Record<string, string> = {
   直角方形: "Square",
   圆角: "RoundedSquare",
   方形: "Square",
+  系统字体: "System",
   等宽: "MapleMonoCN",
   游梦: "Yomeng",
   霞鹜文楷: "LXGWWenKai",
@@ -54,6 +55,11 @@ export function parseThemeSelectOption(raw: unknown, fallback: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return fallback;
   const lastSpace = trimmed.lastIndexOf(" ");
-  const token = lastSpace === -1 ? trimmed : trimmed.slice(lastSpace + 1).trim();
-  return (THEME_OPTION_VALUE_MAP[token] ?? token) || fallback;
+  const token =
+    lastSpace === -1 ? trimmed : trimmed.slice(lastSpace + 1).trim();
+  return (
+    (Object.hasOwn(THEME_OPTION_VALUE_MAP, token)
+      ? THEME_OPTION_VALUE_MAP[token]
+      : token) || fallback
+  );
 }

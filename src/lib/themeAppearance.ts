@@ -8,7 +8,6 @@ import {
   fontSchemeFromTheme,
   resolveFontScheme,
 } from "@/lib/fontScheme";
-import { DEFAULT_FONT_PRESET_ID } from "@/lib/fontScheme/tokens";
 import {
   resolveThemePreference,
   syncDocumentThemeClass,
@@ -37,9 +36,14 @@ type ThemeSettingsCache = {
   settings: Record<string, unknown>;
 };
 
-function appearanceSettings(raw: Record<string, unknown>): Record<string, unknown> {
+function appearanceSettings(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
   return Object.fromEntries(
-    APPEARANCE_KEYS.filter((key) => key in raw).map((key) => [key, raw[key]]),
+    APPEARANCE_KEYS.filter((key) => Object.hasOwn(raw, key)).map((key) => [
+      key,
+      raw[key],
+    ]),
   );
 }
 
@@ -56,16 +60,21 @@ export function readThemeSettingsCache(): Record<string, unknown> | null {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") return null;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return null;
 
     const cache = parsed as Partial<ThemeSettingsCache>;
     if (
       cache.version === CACHE_VERSION &&
-      typeof cache.fetchedAt === "number" &&
+      Number.isFinite(cache.fetchedAt) &&
       cache.settings &&
-      typeof cache.settings === "object"
+      typeof cache.settings === "object" &&
+      !Array.isArray(cache.settings)
     ) {
-      if (Date.now() - cache.fetchedAt > CACHE_TTL_MS) {
+      if (
+        Date.now() - cache.fetchedAt > CACHE_TTL_MS ||
+        cache.fetchedAt > Date.now() + 60_000
+      ) {
         clearThemeSettingsCache();
         return null;
       }
@@ -78,6 +87,7 @@ export function readThemeSettingsCache(): Record<string, unknown> | null {
     writeThemeSettingsCache(migrated);
     return migrated;
   } catch {
+    clearThemeSettingsCache();
     return null;
   }
 }
@@ -118,13 +128,17 @@ export function bootstrapThemeAppearance(): ResolvedTheme {
   const cached = readThemeSettingsCache();
 
   if (cached) {
-    applyAppearanceFromThemeSettings(cached, mode);
-    return mode;
+    try {
+      applyAppearanceFromThemeSettings(cached, mode);
+      return mode;
+    } catch {
+      clearThemeSettingsCache();
+    }
   }
 
   applyFontScheme(
     resolveFontScheme({
-      presetId: DEFAULT_FONT_PRESET_ID,
+      presetId: "System",
       customFamily: "",
       customCssUrl: "",
     }),
@@ -140,7 +154,12 @@ export function syncThemeAppearanceFromPublicSettings(
     applyAppearanceFromThemeSettings({}, resolveThemePreference());
     return;
   }
-  const settings = appearanceSettings(raw);
-  writeThemeSettingsCache(settings);
-  applyAppearanceFromThemeSettings(settings, resolveThemePreference());
+  try {
+    const settings = appearanceSettings(raw);
+    applyAppearanceFromThemeSettings(settings, resolveThemePreference());
+    writeThemeSettingsCache(settings);
+  } catch {
+    clearThemeSettingsCache();
+    applyAppearanceFromThemeSettings({}, resolveThemePreference());
+  }
 }

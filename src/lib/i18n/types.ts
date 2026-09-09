@@ -155,6 +155,13 @@ export type Messages = {
   errorCheckEnv: string;
   liveDataStale: string;
   liveDataUnavailable: string;
+  errorSection: string;
+  errorHistory: string;
+  reloadPage: string;
+  previousPage: string;
+  nextPage: string;
+  nodePages: string;
+  residualNoConversion: string;
   retry: string;
   statusUnknown: string;
   clearSearch: string;

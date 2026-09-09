@@ -1,3 +1,4 @@
+import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
 /**
  * @license
  * SPDX-License-Identifier: MIT
@@ -10,7 +11,10 @@ import type { Lang } from "@/lib/i18n";
 import { translations } from "@/lib/i18n";
 import { zenType, zenTouch } from "@/lib/typography";
 import { zenBorder, zenText } from "@/lib/zenSemantics";
-import { useZenPresence, ZEN_MOTION_MODAL_EXIT_MS } from "@/hooks/useZenPresence";
+import {
+  useZenPresence,
+  ZEN_MOTION_MODAL_EXIT_MS,
+} from "@/hooks/useZenPresence";
 import { zenModalMotion, zenMotion } from "@/lib/zenMotion";
 import type { NodeDistributionMapNode } from "@/components/NodeDistributionMap";
 import { useModalA11y } from "@/hooks/useModalA11y";
@@ -63,7 +67,9 @@ export function NodeDistributionMapModal({
         className={`relative z-10 flex w-full max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl max-h-[min(90vh,720px)] lg:max-h-[min(90vh,860px)] xl:max-h-[min(88vh,980px)] 2xl:max-h-[min(86vh,1100px)] flex-col overflow-hidden rounded-xl border ${zenBorder.default} bg-zen-surface shadow-2xl ${motion.panel}`}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className={`flex shrink-0 items-center justify-between gap-4 border-b border-zen-line px-4 py-3 sm:px-5 sm:py-4 lg:px-7 lg:py-4 ${zenMotion.fadeInUp}`}>
+        <div
+          className={`flex shrink-0 items-center justify-between gap-4 border-b border-zen-line px-4 py-3 sm:px-5 sm:py-4 lg:px-7 lg:py-4 ${zenMotion.fadeInUp}`}
+        >
           <h2
             id="node-map-dialog-title"
             className={`${zenType.section} zen-track-tight ${zenText.subtle} font-mono uppercase`}
@@ -79,24 +85,28 @@ export function NodeDistributionMapModal({
             <X size={18} strokeWidth={2} />
           </button>
         </div>
-        <div className={`min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-6 xl:px-8 xl:py-7 ${zenMotion.fadeInUpDelayed}`}>
-          <Suspense
-            fallback={
-              <div
-                role="status"
-                className="flex min-h-[24rem] items-center justify-center font-mono text-zen-fg-muted"
-              >
-                {t.loadingData}
-              </div>
-            }
-          >
-            <NodeDistributionMap
-              nodes={nodes}
-              theme={theme}
-              lang={lang}
-              presentation="modal"
-            />
-          </Suspense>
+        <div
+          className={`min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:px-7 lg:py-6 xl:px-8 xl:py-7 ${zenMotion.fadeInUpDelayed}`}
+        >
+          <SectionErrorBoundary>
+            <Suspense
+              fallback={
+                <div
+                  role="status"
+                  className="flex min-h-[24rem] items-center justify-center font-mono text-zen-fg-muted"
+                >
+                  {t.loadingData}
+                </div>
+              }
+            >
+              <NodeDistributionMap
+                nodes={nodes}
+                theme={theme}
+                lang={lang}
+                presentation="modal"
+              />
+            </Suspense>
+          </SectionErrorBoundary>
         </div>
       </div>
     </div>,

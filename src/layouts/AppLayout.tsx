@@ -25,6 +25,7 @@ import { usePublicInfo } from "@/contexts/PublicInfoContext";
 export function AppLayout() {
   useSiteMeta();
   const {
+    publicInfo,
     error: publicInfoError,
     refresh: refreshPublicInfo,
   } = usePublicInfo();
@@ -53,15 +54,19 @@ export function AppLayout() {
     loadPingSummary: !isDetail && showNetworkQuality,
     loadLatencyHistory: !isDetail && showLatency,
   });
-  const { theme, preference: themePreference, setPreference: setThemePreference } =
-    useThemePreference();
+  const {
+    theme,
+    preference: themePreference,
+    setPreference: setThemePreference,
+  } = useThemePreference();
   const { lang, setPreference: setLangPreference } = useLangPreference();
   useColorScheme(
     theme,
     colorScheme.presetId,
     colorScheme.overrides,
+    Boolean(publicInfo),
   );
-  useThemeFont(fontScheme);
+  useThemeFont(fontScheme, Boolean(publicInfo));
   const komariVersion = useKomariVersion();
   const themeVersion = __THEME_VERSION__;
   const t = translations[lang];
@@ -94,7 +99,9 @@ export function AppLayout() {
           {t.errorLoadNodes} {error}
         </span>
         {import.meta.env.DEV ? (
-          <span className={`${zenType.caption} ${textMutedClass}`}>{t.errorCheckEnv}</span>
+          <span className={`${zenType.caption} ${textMutedClass}`}>
+            {t.errorCheckEnv}
+          </span>
         ) : null}
         <button
           type="button"
@@ -122,7 +129,9 @@ export function AppLayout() {
       <div className="mx-auto w-full max-w-[1600px] @container">
         <div
           className={`transition-[gap] duration-500 ease-out ${
-            isDetail ? "space-y-4 md:space-y-5" : "space-y-10 md:space-y-16 lg:space-y-20"
+            isDetail
+              ? "space-y-4 md:space-y-5"
+              : "space-y-7 md:space-y-9 lg:space-y-10"
           }`}
         >
           <ConsoleHeader
@@ -180,7 +189,9 @@ export function AppLayout() {
               role="status"
               className={`flex flex-wrap items-center justify-between gap-2 rounded-md border ${zenBorder.default} bg-zen-elevate/20 px-3 py-2 font-mono ${zenType.caption} text-zen-fg-strong`}
             >
-              <span>{t.errorLoadNodes} {error}</span>
+              <span>
+                {t.errorLoadNodes} {error}
+              </span>
               <button
                 type="button"
                 onClick={refreshNodes}
@@ -205,7 +216,9 @@ export function AppLayout() {
         <footer
           className={`km-footer mt-6 md:mt-7 pt-5 sm:pt-6 md:pt-8 border-t ${zenBorder.default} text-center ${textMutedClass} leading-relaxed`}
         >
-          <div className={`${zenType.caption} sm:text-xs tracking-wide font-mono`}>
+          <div
+            className={`${zenType.caption} sm:text-xs tracking-wide font-mono`}
+          >
             <div className="sm:hidden whitespace-nowrap">
               <a
                 href="https://github.com/komari-monitor/komari"
@@ -216,7 +229,9 @@ export function AppLayout() {
                 Komari
               </a>
               {komariVersion ? (
-                <span className="ml-1 font-normal opacity-70">v{komariVersion}</span>
+                <span className="ml-1 font-normal opacity-70">
+                  v{komariVersion}
+                </span>
               ) : null}
               <span className="mx-2 opacity-40">·</span>
               <a
@@ -227,7 +242,9 @@ export function AppLayout() {
               >
                 Zen
               </a>
-              <span className="ml-1 font-normal opacity-70">v{themeVersion}</span>
+              <span className="ml-1 font-normal opacity-70">
+                v{themeVersion}
+              </span>
             </div>
             <div className="hidden sm:block">
               Powered by{" "}
@@ -240,7 +257,9 @@ export function AppLayout() {
                 Komari Monitor
               </a>
               {komariVersion ? (
-                <span className="ml-1 font-normal opacity-70">v{komariVersion}</span>
+                <span className="ml-1 font-normal opacity-70">
+                  v{komariVersion}
+                </span>
               ) : null}
               <span className="ml-4 md:ml-6">Theme by</span>{" "}
               <a
@@ -251,7 +270,9 @@ export function AppLayout() {
               >
                 Komari Zen
               </a>
-              <span className="ml-1 font-normal opacity-70">v{themeVersion}</span>
+              <span className="ml-1 font-normal opacity-70">
+                v{themeVersion}
+              </span>
             </div>
           </div>
           {sanitizedFooterHtml ? (

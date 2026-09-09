@@ -7,8 +7,10 @@ export function useColorScheme(
   theme: ResolvedTheme,
   presetId: ColorPresetId,
   overrides: ColorSchemeOverrides,
+  enabled = true,
 ): void {
   useLayoutEffect(() => {
+    if (!enabled) return;
     applyColorScheme(
       resolveColorScheme({
         presetId,
@@ -17,6 +19,7 @@ export function useColorScheme(
       }),
     );
   }, [
+    enabled,
     theme,
     presetId,
     overrides.bgLight,

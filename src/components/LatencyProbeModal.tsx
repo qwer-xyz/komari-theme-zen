@@ -1,3 +1,4 @@
+import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
 /**
  * @license
  * SPDX-License-Identifier: MIT
@@ -13,7 +14,10 @@ import { HistoryRangeSelector } from "@/components/detail/HistoryRangeSelector";
 import { useRecordSettings } from "@/hooks/useRecordSettings";
 import { zenType, zenTouch } from "@/lib/typography";
 import { zenBorder, zenText } from "@/lib/zenSemantics";
-import { useZenPresence, ZEN_MOTION_MODAL_EXIT_MS } from "@/hooks/useZenPresence";
+import {
+  useZenPresence,
+  ZEN_MOTION_MODAL_EXIT_MS,
+} from "@/hooks/useZenPresence";
 import { useModalA11y } from "@/hooks/useModalA11y";
 import { zenModalMotion, zenMotion } from "@/lib/zenMotion";
 
@@ -183,26 +187,28 @@ export function LatencyProbeModal({
               </div>
             ) : null}
 
-            <Suspense
-              fallback={
-                <div
-                  role="status"
-                  className="flex min-h-[28rem] items-center justify-center font-mono text-zen-fg-muted"
-                >
-                  {t.loadingData}
-                </div>
-              }
-            >
-              <LatencyProbePanel
-                uuid={displayNode.id}
-                hours={selectedPingHours}
-                onLoadingChange={setIsPingLoading}
-                selectedProbes={selectedProbes}
-                onToggleProbe={handleToggleProbe}
-                lang={lang}
-                theme={theme}
-              />
-            </Suspense>
+            <SectionErrorBoundary>
+              <Suspense
+                fallback={
+                  <div
+                    role="status"
+                    className="flex min-h-[28rem] items-center justify-center font-mono text-zen-fg-muted"
+                  >
+                    {t.loadingData}
+                  </div>
+                }
+              >
+                <LatencyProbePanel
+                  uuid={displayNode.id}
+                  hours={selectedPingHours}
+                  onLoadingChange={setIsPingLoading}
+                  selectedProbes={selectedProbes}
+                  onToggleProbe={handleToggleProbe}
+                  lang={lang}
+                  theme={theme}
+                />
+              </Suspense>
+            </SectionErrorBoundary>
           </div>
         </div>
       </div>

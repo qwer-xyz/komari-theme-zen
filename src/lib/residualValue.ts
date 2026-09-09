@@ -1,7 +1,11 @@
 import type { VPSNode } from "@/types";
 import { resolveExpiryState } from "@/lib/billingDisplay";
 
-export type ResidualExchangeSource = "Frankfurter" | "ExchangeRate-API" | "Cache";
+export type ResidualExchangeSource =
+  | "Frankfurter"
+  | "ExchangeRate-API"
+  | "Cache"
+  | "Local";
 
 export type ResidualExchangeRates = {
   base: string;
@@ -473,7 +477,9 @@ export function normalizeCurrencyCode(raw: string | undefined): string | null {
     .toUpperCase();
   if (!text) return null;
 
-  const direct = CURRENCY_ALIASES.find(([alias]) => text === alias.toUpperCase());
+  const direct = CURRENCY_ALIASES.find(
+    ([alias]) => text === alias.toUpperCase(),
+  );
   if (direct) return direct[1];
 
   const codeMatch = text.match(/[A-Z]{3}/);
@@ -499,7 +505,10 @@ function computeNodeResidualValue(node: VPSNode): number {
   const expiry = resolveExpiryState(node.expiredAt);
   if (expiry.kind === "expired") return 0;
   if (node.billingCycle === -1) return node.price;
-  return (node.price * expiry.daysRemaining) / effectiveBillingCycleDays(node.billingCycle);
+  return (
+    (node.price * expiry.daysRemaining) /
+    effectiveBillingCycleDays(node.billingCycle)
+  );
 }
 
 export function computeResidualValueSummary(
@@ -565,7 +574,8 @@ export function computeResidualValueSummary(
       continue;
     }
 
-    const rate = currencyCode === baseCurrency ? 1 : exchangeRates[currencyCode];
+    const rate =
+      currencyCode === baseCurrency ? 1 : exchangeRates[currencyCode];
     if (!Number.isFinite(rate) || rate <= 0) {
       excludedNodes.push({
         id: node.id,
@@ -604,10 +614,15 @@ export function computeResidualValueSummary(
   return {
     enabled: true,
     baseCurrency,
-    totalValue: includedNodes.reduce((sum, node) => sum + node.convertedValue, 0),
+    totalValue: includedNodes.reduce(
+      (sum, node) => sum + node.convertedValue,
+      0,
+    ),
     includedCount: includedNodes.length,
     excludedCount: excludedNodes.length,
-    includedNodes: includedNodes.sort((a, b) => b.convertedValue - a.convertedValue),
+    includedNodes: includedNodes.sort(
+      (a, b) => b.convertedValue - a.convertedValue,
+    ),
     excludedNodes,
     currencyBuckets: [...bucketMap.values()].sort(
       (a, b) => b.convertedTotal - a.convertedTotal,
@@ -670,15 +685,19 @@ function hasRequiredRates(
   );
 }
 
-async function fetchFrankfurterRates(base: string): Promise<ResidualExchangeRates> {
+async function fetchFrankfurterRates(
+  base: string,
+): Promise<ResidualExchangeRates> {
   const response = await fetchWithTimeout(
     `https://api.frankfurter.dev/v2/rates?base=${encodeURIComponent(base)}`,
   );
   if (!response.ok) throw new Error(`Frankfurter ${response.status}`);
-  const data = (await response.json()) as {
-    base?: string;
-    rates?: Record<string, number>;
-  } | Array<{ quote?: string; rate?: number }>;
+  const data = (await response.json()) as
+    | {
+        base?: string;
+        rates?: Record<string, number>;
+      }
+    | Array<{ quote?: string; rate?: number }>;
   const rates = Array.isArray(data)
     ? Object.fromEntries(
         data
@@ -702,7 +721,9 @@ async function fetchFrankfurterRates(base: string): Promise<ResidualExchangeRate
   };
 }
 
-async function fetchExchangeRateApiRates(base: string): Promise<ResidualExchangeRates> {
+async function fetchExchangeRateApiRates(
+  base: string,
+): Promise<ResidualExchangeRates> {
   const response = await fetchWithTimeout(
     `https://open.er-api.com/v6/latest/${encodeURIComponent(base)}`,
   );
@@ -730,6 +751,16 @@ export async function loadResidualExchangeRates(
   requiredCurrencies: readonly string[] = [],
 ): Promise<ResidualExchangeRates> {
   const base = normalizePrimaryCurrency(baseCurrency);
+  if (
+    requiredCurrencies.length > 0 &&
+    requiredCurrencies.every((currency) => currency === base)
+  )
+    return {
+      base,
+      rates: { [base]: 1 },
+      source: "Local",
+      fetchedAt: Date.now(),
+    };
   const requestKey = `${base}:${[...requiredCurrencies].sort().join(",")}`;
   const existing = inflightRateRequests.get(requestKey);
   if (existing) return existing;
@@ -740,8 +771,10 @@ export async function loadResidualExchangeRates(
 
   const request = (async () => {
     let firstError: unknown;
+    let partial: ResidualExchangeRates | null = null;
     try {
       const rates = await fetchFrankfurterRates(base);
+      partial = rates;
       if (hasRequiredRates(rates, requiredCurrencies)) {
         writeCachedRates(rates);
         return rates;
@@ -752,8 +785,11 @@ export async function loadResidualExchangeRates(
 
     try {
       const rates = await fetchExchangeRateApiRates(base);
-      if (!hasRequiredRates(rates, requiredCurrencies)) {
-        throw new Error("Exchange-rate response is missing required currencies");
+      if (!hasRequiredRates(rates, requiredCurrencies) && partial) {
+        const coverage = (value: ResidualExchangeRates) =>
+          requiredCurrencies.filter((currency) => value.rates[currency] > 0)
+            .length;
+        if (coverage(partial) > coverage(rates)) return partial;
       }
       writeCachedRates(rates);
       return rates;
@@ -761,6 +797,8 @@ export async function loadResidualExchangeRates(
       if (stale && hasRequiredRates(stale, requiredCurrencies)) {
         return { ...stale, fromCache: true };
       }
+      if (partial) return partial;
+      if (stale) return { ...stale, fromCache: true };
       throw error instanceof Error
         ? error
         : firstError instanceof Error

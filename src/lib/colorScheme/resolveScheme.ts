@@ -5,10 +5,7 @@ import type {
   ModeColorTokens,
   ResolvedColorVars,
 } from "./tokens";
-import {
-  CSS_VAR_KEYS,
-  DEFAULT_PRESET_ID,
-} from "./tokens";
+import { CSS_VAR_KEYS, DEFAULT_PRESET_ID } from "./tokens";
 
 export type ResolveColorSchemeInput = {
   presetId: ColorPresetId;
@@ -73,9 +70,8 @@ export function ensureTextContrast(
   mode: "light" | "dark",
   minimum = 4.5,
 ): string {
-  const fallback = mode === "dark"
-    ? { r: 0, g: 0, b: 0 }
-    : { r: 255, g: 255, b: 255 };
+  const fallback =
+    mode === "dark" ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
   const color = parseRgb(foreground, fallback);
   const surfaces = backgrounds
     .map((background) => parseRgb(background, fallback))
@@ -146,7 +142,7 @@ function modeTokensToVars(tokens: ModeColorTokens): ResolvedColorVars {
 export function normalizePresetId(raw: unknown): ColorPresetId {
   if (typeof raw !== "string") return DEFAULT_PRESET_ID;
   const id = raw.trim() as ColorPresetId;
-  return id in COLOR_PRESETS ? id : DEFAULT_PRESET_ID;
+  return Object.hasOwn(COLOR_PRESETS, id) ? id : DEFAULT_PRESET_ID;
 }
 
 export function resolveColorScheme({
@@ -154,7 +150,7 @@ export function resolveColorScheme({
   mode,
   overrides = {},
 }: ResolveColorSchemeInput): ResolvedColorVars {
-  const preset = COLOR_PRESETS[presetId] ?? COLOR_PRESETS[DEFAULT_PRESET_ID];
+  const preset = COLOR_PRESETS[normalizePresetId(presetId)];
   const modeTokens: ModeColorTokens = {
     ...(mode === "dark" ? preset.dark : preset.light),
   };
@@ -188,11 +184,7 @@ export function resolveColorScheme({
     "warning",
     "danger",
   ] as const) {
-    modeTokens[key] = ensureTextContrast(
-      modeTokens[key],
-      textSurfaces,
-      mode,
-    );
+    modeTokens[key] = ensureTextContrast(modeTokens[key], textSurfaces, mode);
   }
 
   const vars = modeTokensToVars(modeTokens);

@@ -154,6 +154,13 @@ export const zhTW = {
   errorCheckEnv: "請檢查 .env.development 中的 VITE_API_TARGET",
   liveDataStale: "即時更新已延遲，目前顯示最後一次收到的資料。",
   liveDataUnavailable: "暫時無法取得即時狀態，節點狀態目前未知。",
+  errorSection: "此區域載入失敗。",
+  errorHistory: "歷史資料重新整理失敗。",
+  reloadPage: "重新載入頁面",
+  previousPage: "上一頁",
+  nextPage: "下一頁",
+  nodePages: "節點分頁",
+  residualNoConversion: "無需換算",
   retry: "重試",
   statusUnknown: "未知",
   clearSearch: "清除搜尋",
@@ -207,5 +214,6 @@ export const zhTW = {
   mapScrollHint: "左右滑動",
   mapExpandHint: "點擊展開",
   btnClose: "關閉",
-  mapRegionTooltip: (code, online, total) => `${code} · ${online}/${total} 在線`,
+  mapRegionTooltip: (code, online, total) =>
+    `${code} · ${online}/${total} 在線`,
 } satisfies Messages;

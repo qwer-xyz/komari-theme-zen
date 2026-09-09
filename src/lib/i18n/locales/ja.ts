@@ -153,8 +153,16 @@ export const ja = {
   errorLoadNodes: "ノードの読込に失敗:",
   errorLoadPublicInfo: "公開設定の読込に失敗:",
   errorCheckEnv: ".env.development の VITE_API_TARGET を確認してください",
-  liveDataStale: "ライブ更新が遅延しています。最後に受信したデータを表示しています。",
+  liveDataStale:
+    "ライブ更新が遅延しています。最後に受信したデータを表示しています。",
   liveDataUnavailable: "ライブ状態を取得できません。ノード状態は現在不明です。",
+  errorSection: "このセクションを読み込めませんでした。",
+  errorHistory: "履歴を更新できませんでした。",
+  reloadPage: "ページを再読込",
+  previousPage: "前へ",
+  nextPage: "次へ",
+  nodePages: "ノードのページ",
+  residualNoConversion: "換算不要",
   retry: "再試行",
   statusUnknown: "不明",
   clearSearch: "検索をクリア",
@@ -208,5 +216,6 @@ export const ja = {
   mapScrollHint: "左右スワイプ",
   mapExpandHint: "タップで展開",
   btnClose: "閉じる",
-  mapRegionTooltip: (code, online, total) => `${code} · ${online}/${total} オンライン`,
+  mapRegionTooltip: (code, online, total) =>
+    `${code} · ${online}/${total} オンライン`,
 } satisfies Messages;

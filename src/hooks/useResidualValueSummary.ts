@@ -17,7 +17,10 @@ export type ResidualValueState = {
   error: string | null;
 };
 
-const emptySummary = (baseCurrency: string, enabled: boolean): ResidualValueSummary => ({
+const emptySummary = (
+  baseCurrency: string,
+  enabled: boolean,
+): ResidualValueSummary => ({
   enabled,
   baseCurrency,
   totalValue: 0,
@@ -42,26 +45,26 @@ export function useResidualValueSummary(
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = React.useState(0);
-  const requiredCurrencyKey = React.useMemo(
-    () =>
-      [
-        ...new Set(
-          nodes
-            .map((node) => normalizeCurrencyCode(node.currency))
-            .filter((currency): currency is string => Boolean(currency)),
-        ),
-      ]
-        .sort()
-        .join(","),
-    [nodes],
-  );
+  const requiredCurrencyKey = React.useMemo(() => {
+    const currencies = Object.fromEntries(
+      nodes.map((node) => [normalizeCurrencyCode(node.currency), 1]),
+    );
+    const eligible = computeResidualValueSummary(
+      nodes,
+      baseCurrency,
+      currencies,
+    );
+    return [...new Set(eligible.includedNodes.map((node) => node.currencyCode))]
+      .sort()
+      .join(",");
+  }, [nodes, baseCurrency]);
   const requiredCurrencies = React.useMemo(
     () => (requiredCurrencyKey ? requiredCurrencyKey.split(",") : []),
     [requiredCurrencyKey],
   );
 
   React.useEffect(() => {
-    if (!enabled) {
+    if (!enabled || requiredCurrencies.length === 0) {
       setExchangeRates(null);
       setLoading(false);
       setError(null);
@@ -123,19 +126,11 @@ export function useResidualValueSummary(
 
   const summary = React.useMemo(() => {
     if (!enabled) return emptySummary(baseCurrency, false);
-    if (
-      !exchangeRates ||
-      exchangeRates.base !== baseCurrency ||
-      requiredCurrencies.some(
-        (currency) =>
-          currency !== baseCurrency &&
-          (!Number.isFinite(exchangeRates.rates[currency]) ||
-            exchangeRates.rates[currency] <= 0),
-      )
-    ) {
-      return emptySummary(baseCurrency, true);
-    }
-    return computeResidualValueSummary(nodes, baseCurrency, exchangeRates.rates);
+    return computeResidualValueSummary(
+      nodes,
+      baseCurrency,
+      exchangeRates?.base === baseCurrency ? exchangeRates.rates : {},
+    );
   }, [baseCurrency, enabled, exchangeRates, nodes, requiredCurrencies]);
 
   const activeExchangeRates =

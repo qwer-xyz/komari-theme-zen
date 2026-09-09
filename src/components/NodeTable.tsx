@@ -49,12 +49,463 @@ import { PublicRemarkButton } from "@/components/PublicRemarkButton";
 import { LatencyHistoryBlocks } from "@/components/LatencyHistoryBlocks";
 import { LatencyProbeModal } from "@/components/LatencyProbeModal";
 import { MetricPercentBar } from "@/components/MetricSegmentBar";
-import { metricPercentFillClass } from "@/lib/latencyDisplay";
+import {
+  type LatencyColorConfig,
+  metricPercentFillClass,
+} from "@/lib/latencyDisplay";
 import { zenType, zenTouch } from "@/lib/typography";
-import { zenBorder, zenFill, zenInteractive, zenText } from "@/lib/zenSemantics";
+import {
+  zenBorder,
+  zenFill,
+  zenInteractive,
+  zenText,
+} from "@/lib/zenSemantics";
 import { zenMotion } from "@/lib/zenMotion";
 import { ZenTabControl } from "@/components/motion/ZenTabControl";
 import { safePercent } from "@/lib/numeric";
+
+type NodeItemProps = {
+  node: VPSNode;
+  lang: Lang;
+  theme: "light" | "dark";
+  latencyVisible: boolean;
+  showExpiryTime: boolean;
+  latencyColorConfig: LatencyColorConfig;
+  handleNodeContainerClick: (event: React.MouseEvent, node: VPSNode) => void;
+  openLatencyModal: (node: VPSNode) => void;
+  renderTableBilling: (node: VPSNode) => React.ReactNode;
+  shouldShowBillingBadge: (node: VPSNode) => boolean;
+  renderBillingWithAutoRenewal: (
+    node: VPSNode,
+    compact?: boolean,
+  ) => React.ReactNode;
+};
+const textPrimary = zenText.primary;
+const textMuted = zenText.muted;
+const formatSpeed = (kbps: number) => formatKbps(kbps);
+const renderTrafficValue = (node: VPSNode) => (
+  <span className="inline-flex items-center gap-1.5 min-w-0">
+    <span className="truncate">{formatNodeTraffic(node)}</span>
+    {node.bandwidthTotal <= 0 ? (
+      <span
+        className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-bold tracking-wide leading-none ${unlimitedTrafficBadgeClass}`}
+      >
+        <span className={unlimitedTrafficSymbolClass}>∞</span>
+      </span>
+    ) : (
+      <span
+        className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-bold tracking-wide leading-none ${trafficTypeBadgeClass(node.trafficLimitType)}`}
+      >
+        {getTrafficTypeShortLabel(node.trafficLimitType)}
+      </span>
+    )}
+  </span>
+);
+const NodeListRow = React.memo(function NodeListRow({
+  node,
+  lang,
+  theme,
+  latencyVisible,
+  showExpiryTime,
+  latencyColorConfig,
+  handleNodeContainerClick,
+  openLatencyModal,
+  renderTableBilling,
+  shouldShowBillingBadge,
+  renderBillingWithAutoRenewal,
+}: NodeItemProps) {
+  const t = translations[lang];
+  const openLatency = useCallback(
+    () => openLatencyModal(node),
+    [openLatencyModal, node],
+  );
+
+  const cpuColor =
+    node.cpuUsage > 75
+      ? "text-zen-danger font-bold"
+      : node.cpuUsage > 40
+        ? "text-zen-warning font-bold"
+        : textPrimary;
+
+  const memPercent = safePercent(node.memoryUsed, node.memoryTotal);
+  const memColor =
+    memPercent > 80
+      ? "text-zen-danger font-bold"
+      : memPercent > 50
+        ? "text-zen-warning font-bold"
+        : textPrimary;
+
+  const diskPercent = safePercent(node.diskUsed, node.diskTotal);
+  const diskColor =
+    diskPercent > 80
+      ? "text-zen-danger font-bold"
+      : diskPercent > 50
+        ? "text-zen-warning font-bold"
+        : textPrimary;
+
+  return (
+    <tr
+      key={node.id}
+      onClick={(event) => handleNodeContainerClick(event, node)}
+      className={`km-ui-table-row cursor-pointer group border-b border-zen-line hover:bg-zen-elevate transition-[background-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        node.status === "offline"
+          ? "bg-zen-fill-muted/10 text-zen-fg-muted"
+          : node.status === "unknown"
+            ? "bg-zen-warning/[0.04]"
+            : ""
+      }`}
+    >
+      {/* Identification */}
+      <td className={`py-3 px-2 font-sans font-black ${textPrimary}`}>
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Flag flag={node.flag} className="w-4 h-4 shrink-0" />
+            <Link
+              to={`/instance/${encodeURIComponent(node.id)}`}
+              state={{ fromDashboard: true }}
+              className="min-w-0 flex-1 truncate max-w-[240px] md:max-w-[200px] hover:text-zen-accent hover:underline underline-offset-2"
+              title={node.name}
+            >
+              {node.name}
+            </Link>
+            {node.status !== "online" ? (
+              <span
+                className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-bold ${
+                  node.status === "unknown"
+                    ? "border-zen-warning/40 text-zen-warning"
+                    : "border-zen-border-muted text-zen-fg-muted"
+                }`}
+              >
+                {node.status === "unknown"
+                  ? t.statusUnknown
+                  : t.connectionOffline}
+              </span>
+            ) : null}
+            <PublicRemarkButton
+              publicRemark={node.publicRemark}
+              privateRemark={node.privateRemark}
+              theme={theme}
+              publicLabel={t.publicRemark}
+              privateLabel={t.privateRemark}
+              className="shrink-0 ml-auto"
+            />
+          </div>
+          <NodeTags tags={node.tags} theme={theme} size="sm" maxVisible={2} />
+        </div>
+      </td>
+
+      {/* OS Specific */}
+      <td
+        className={`py-3 px-2 ${textMuted} ${zenType.data} whitespace-nowrap`}
+      >
+        {(() => {
+          const osDetails = getOSDetails(node.os, node.arch);
+          return (
+            <span className="flex items-center gap-2 inline-flex">
+              <OsIcon os={node.os} />
+              <span>{osDetails.text}</span>
+            </span>
+          );
+        })()}
+      </td>
+
+      {/* CPU Live Load */}
+      <td className="py-3 px-2">
+        {node.online ? (
+          <MetricAsciiBar
+            percent={node.cpuUsage}
+            colorClass={cpuColor}
+            textPrimaryClass={textPrimary}
+          />
+        ) : (
+          "---"
+        )}
+      </td>
+
+      {/* Memory Usage */}
+      <td className="py-3 px-2">
+        {node.online ? (
+          <MetricAsciiBar
+            percent={memPercent}
+            colorClass={memColor}
+            textPrimaryClass={textPrimary}
+          />
+        ) : (
+          "---"
+        )}
+      </td>
+
+      {/* Root Disk Usage */}
+      <td className={`py-3 px-2`}>
+        {node.online ? (
+          <MetricAsciiBar
+            percent={diskPercent}
+            colorClass={diskColor}
+            textPrimaryClass={textPrimary}
+          />
+        ) : (
+          "---"
+        )}
+      </td>
+
+      {/* Ping Latency */}
+      {latencyVisible && (
+        <td className="py-3 px-2">
+          {node.online && node.latency > 0 ? (
+            <LatencyHistoryBlocks
+              samples={node.latencyHistory}
+              currentMs={node.latency}
+              theme={theme}
+              textPrimary={textPrimary}
+              colorConfig={latencyColorConfig}
+              historyLabel={t.latencyHistoryAria}
+              onValueClick={openLatency}
+            />
+          ) : (
+            <span className={textMuted}>—</span>
+          )}
+        </td>
+      )}
+
+      {/* Bandwidth Speed */}
+      <td className="py-3 px-2">
+        {node.online ? (
+          <span
+            className={`inline-flex items-baseline gap-x-2 font-bold ${textPrimary}`}
+          >
+            <span>↓ {formatSpeed(node.netSpeedIn)}</span>
+            <span>↑ {formatSpeed(node.netSpeedOut)}</span>
+          </span>
+        ) : (
+          "---"
+        )}
+      </td>
+
+      {/* Traffic Quantity */}
+      <td className="py-3 px-2">
+        {node.online ? (
+          <span className={`font-bold ${textPrimary}`}>
+            {renderTrafficValue(node)}
+          </span>
+        ) : (
+          "---"
+        )}
+      </td>
+
+      {showExpiryTime && (
+        <td className={`py-3 px-2 ${zenType.data} font-bold`}>
+          {renderTableBilling(node)}
+        </td>
+      )}
+    </tr>
+  );
+});
+const NodeCard = React.memo(function NodeCard({
+  node,
+  lang,
+  theme,
+  latencyVisible,
+  showExpiryTime,
+  latencyColorConfig,
+  handleNodeContainerClick,
+  openLatencyModal,
+  renderTableBilling,
+  shouldShowBillingBadge,
+  renderBillingWithAutoRenewal,
+}: NodeItemProps) {
+  const t = translations[lang];
+  const openLatency = useCallback(
+    () => openLatencyModal(node),
+    [openLatencyModal, node],
+  );
+
+  const cpuColor =
+    node.cpuUsage > 75
+      ? "text-zen-danger font-bold"
+      : node.cpuUsage > 40
+        ? "text-zen-warning font-bold"
+        : textPrimary;
+
+  const memPercent = safePercent(node.memoryUsed, node.memoryTotal);
+  const memColor =
+    memPercent > 80
+      ? "text-zen-danger font-bold"
+      : memPercent > 50
+        ? "text-zen-warning font-bold"
+        : textPrimary;
+
+  const diskPercent = safePercent(node.diskUsed, node.diskTotal);
+  const diskColor =
+    diskPercent > 80
+      ? "text-zen-danger font-bold"
+      : diskPercent > 50
+        ? "text-zen-warning font-bold"
+        : textPrimary;
+
+  return (
+    <article
+      key={node.id}
+      onClick={(event) => handleNodeContainerClick(event, node)}
+      className={`km-node-card cursor-pointer group flex flex-col gap-3 p-4 sm:p-5 rounded-xl border border-zen-line bg-zen-elevate shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zen-line-strong hover:shadow-[0_4px_14px_rgba(0,0,0,0.06)] [content-visibility:auto] [contain-intrinsic-size:auto_320px] ${zenMotion.card} ${
+        node.status === "offline"
+          ? "bg-zen-fill-muted/10 text-zen-fg-muted"
+          : node.status === "unknown"
+            ? "border-zen-warning/35 bg-zen-warning/[0.04]"
+            : ""
+      }`}
+    >
+      {/* Card header：标签与标题同一行，不额外占高 */}
+      <div className="flex items-center gap-2 min-w-0">
+        <Flag flag={node.flag} className="w-5 h-5 shrink-0" />
+        <h4
+          className={`min-w-0 flex-1 truncate font-sans ${zenType.body} font-bold tracking-tight ${textPrimary}`}
+          title={node.name}
+        >
+          <Link
+            to={`/instance/${encodeURIComponent(node.id)}`}
+            state={{ fromDashboard: true }}
+            className="hover:text-zen-accent hover:underline underline-offset-2"
+          >
+            {node.name}
+          </Link>
+        </h4>
+        {node.status !== "online" ? (
+          <span
+            className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-bold ${
+              node.status === "unknown"
+                ? "border-zen-warning/40 text-zen-warning"
+                : "border-zen-border-muted text-zen-fg-muted"
+            }`}
+          >
+            {node.status === "unknown" ? t.statusUnknown : t.connectionOffline}
+          </span>
+        ) : null}
+        <NodeTags
+          tags={node.tags}
+          theme={theme}
+          size="sm"
+          maxVisible={2}
+          className="shrink-0"
+        />
+        <PublicRemarkButton
+          publicRemark={node.publicRemark}
+          privateRemark={node.privateRemark}
+          theme={theme}
+          publicLabel={t.publicRemark}
+          privateLabel={t.privateRemark}
+          className="shrink-0"
+        />
+      </div>
+
+      {/* Fully Localized pure text metric layout with pure language alignment */}
+      <div
+        className={`space-y-2 font-mono ${zenType.data} leading-relaxed uppercase ${textMuted}`}
+      >
+        <div className="flex justify-between">
+          <span>{t.os}:</span>
+          <span className={`font-bold ${textPrimary} flex items-center gap-2`}>
+            {(() => {
+              const osDetails = getOSDetails(node.os, node.arch);
+              return (
+                <>
+                  <OsIcon os={node.os} />
+                  <span>{osDetails.text}</span>
+                </>
+              );
+            })()}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>{t.cpu}:</span>
+          {node.online ? (
+            <MetricAsciiBar
+              percent={node.cpuUsage}
+              colorClass={cpuColor}
+              textPrimaryClass={textPrimary}
+            />
+          ) : (
+            <span>---</span>
+          )}
+        </div>
+        <div className="flex justify-between">
+          <span>{t.mem}:</span>
+          {node.online ? (
+            <MetricAsciiBar
+              percent={memPercent}
+              colorClass={memColor}
+              textPrimaryClass={textPrimary}
+            />
+          ) : (
+            <span>---</span>
+          )}
+        </div>
+        <div className="flex justify-between">
+          <span>{t.diskspace}:</span>
+          {node.online ? (
+            <MetricAsciiBar
+              percent={diskPercent}
+              colorClass={diskColor}
+              textPrimaryClass={textPrimary}
+            />
+          ) : (
+            <span>---</span>
+          )}
+        </div>
+        {latencyVisible && (
+          <div className="flex justify-between">
+            <span>{t.ping}:</span>
+            {node.online && node.latency > 0 ? (
+              <LatencyHistoryBlocks
+                samples={node.latencyHistory}
+                currentMs={node.latency}
+                theme={theme}
+                textPrimary={textPrimary}
+                colorConfig={latencyColorConfig}
+                historyLabel={t.latencyHistoryAria}
+                onValueClick={openLatency}
+              />
+            ) : (
+              <span>—</span>
+            )}
+          </div>
+        )}
+        <div className="flex justify-between">
+          <span>{t.bandwidth}:</span>
+          {node.online ? (
+            <span
+              className={`inline-flex items-baseline gap-x-2 font-bold ${textPrimary}`}
+            >
+              <span>↓ {formatSpeed(node.netSpeedIn)}</span>
+              <span>↑ {formatSpeed(node.netSpeedOut)}</span>
+            </span>
+          ) : (
+            <span>---</span>
+          )}
+        </div>
+        <div className="flex justify-between gap-2">
+          <span className="shrink-0">{t.traffic}:</span>
+          {node.online ? (
+            <span className={`font-bold ${textPrimary} min-w-0 text-right`}>
+              {renderTrafficValue(node)}
+            </span>
+          ) : (
+            <span>---</span>
+          )}
+        </div>
+        {showExpiryTime && (
+          <div className="flex justify-between gap-2">
+            <span className="shrink-0">
+              {shouldShowBillingBadge(node) ? t.autoRenewal : t.expiry}:
+            </span>
+            <span className="min-w-0 text-right">
+              {renderBillingWithAutoRenewal(node, true)}
+            </span>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+});
 
 interface NodeTableProps {
   nodes: VPSNode[];
@@ -164,6 +615,7 @@ export function NodeTable({
   const latencyVisible =
     showLatency && (recordEnabled || nodes.some((node) => node.latency > 0));
   const [searchParams, setSearchParams] = useSearchParams();
+  const nodeDisplayRef = useRef<HTMLDivElement>(null);
   const routeGroup = (searchParams.get("group") ?? "").trim();
   const routeSearch = searchParams.get("q") ?? "";
   const routeSort = searchParams.get("sort") as SortField | null;
@@ -183,9 +635,8 @@ export function NodeTable({
     "latency",
     "days",
   ]);
-  const requestedSort = routeSort && validSortFields.has(routeSort)
-    ? routeSort
-    : mappedDefaultSort;
+  const requestedSort =
+    routeSort && validSortFields.has(routeSort) ? routeSort : mappedDefaultSort;
   const initialSortField: SortField =
     (requestedSort === "latency" && !latencyVisible) ||
     (requestedSort === "days" && !showExpiryTime)
@@ -201,14 +652,16 @@ export function NodeTable({
   const [activeGroup, setActiveGroup] = useState<string>(
     () => routeGroup || ALL_NODE_GROUP,
   );
-  const [latencyModalNode, setLatencyModalNode] = useState<VPSNode | null>(null);
+  const [latencyModalNode, setLatencyModalNode] = useState<VPSNode | null>(
+    null,
+  );
   const [searchTerm, setSearchTerm] = useState<string>(routeSearch);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const sortField = initialSortField;
   const sortOrder = initialSortOrder;
-  const [openSortMenu, setOpenSortMenu] = useState<
-    "mobile" | "desktop" | null
-  >(null);
+  const [openSortMenu, setOpenSortMenu] = useState<"mobile" | "desktop" | null>(
+    null,
+  );
   const sortMenuIdPrefix = React.useId();
   const mobileSortMenuRef = useRef<HTMLDivElement>(null);
   const desktopSortMenuRef = useRef<HTMLDivElement>(null);
@@ -216,7 +669,10 @@ export function NodeTable({
   const desktopSortMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const searchEditedRef = React.useRef(false);
   const groupScrollRef = useRef<HTMLDivElement>(null);
-  const [groupScrollFade, setGroupScrollFade] = useState({ left: false, right: false });
+  const [groupScrollFade, setGroupScrollFade] = useState({
+    left: false,
+    right: false,
+  });
 
   const refreshGroupScrollFade = useCallback(() => {
     const scroller = groupScrollRef.current;
@@ -229,13 +685,13 @@ export function NodeTable({
     });
   }, []);
 
-  const { viewMode, effectiveViewMode, setViewMode } = useViewMode(defaultViewMode);
+  const { viewMode, effectiveViewMode, setViewMode } =
+    useViewMode(defaultViewMode);
 
   useEffect(() => {
     if (!openSortMenu) return;
-    const menuRef = openSortMenu === "mobile"
-      ? mobileSortMenuRef
-      : desktopSortMenuRef;
+    const menuRef =
+      openSortMenu === "mobile" ? mobileSortMenuRef : desktopSortMenuRef;
     const frame = window.requestAnimationFrame(() => {
       const current = menuRef.current?.querySelector<HTMLElement>(
         '[aria-checked="true"]',
@@ -255,15 +711,19 @@ export function NodeTable({
 
   const updateGroupSearchParam = useCallback(
     (group: string, replace = false) => {
-      setSearchParams((previous) => {
-        const nextParams = new URLSearchParams(previous);
-        if (group === ALL_NODE_GROUP) {
-          nextParams.delete("group");
-        } else {
-          nextParams.set("group", group);
-        }
-        return nextParams;
-      }, { replace });
+      setSearchParams(
+        (previous) => {
+          const nextParams = new URLSearchParams(previous);
+          nextParams.delete("page");
+          if (group === ALL_NODE_GROUP) {
+            nextParams.delete("group");
+          } else {
+            nextParams.set("group", group);
+          }
+          return nextParams;
+        },
+        { replace },
+      );
     },
     [setSearchParams],
   );
@@ -313,13 +773,15 @@ export function NodeTable({
     { value: "disk", label: t.disk },
     { value: "bandwidth", label: t.bandwidth },
     { value: "traffic", label: t.traffic },
-    ...(latencyVisible ? [{ value: "latency" as SortField, label: t.ping }] : []),
-    ...(showExpiryTime ? [{ value: "days" as SortField, label: t.expiry }] : []),
+    ...(latencyVisible
+      ? [{ value: "latency" as SortField, label: t.ping }]
+      : []),
+    ...(showExpiryTime
+      ? [{ value: "days" as SortField, label: t.expiry }]
+      : []),
     { value: "os", label: t.os },
     { value: "status", label: t.status },
   ];
-
-  const formatSpeed = (kbps: number) => formatKbps(kbps);
 
   const billingLabels: BillingLabels = useMemo(
     () => ({
@@ -360,154 +822,146 @@ export function NodeTable({
     ],
   );
 
-  const getNodeBilling = (node: VPSNode) =>
-    formatNodeBilling(
-      {
-        price: node.price,
-        currency: node.currency,
-        billingCycle: node.billingCycle,
-        expiredAt: node.expiredAt,
-      },
-      billingLabels,
-    );
+  const {
+    renderTableBilling,
+    shouldShowBillingBadge,
+    renderBillingWithAutoRenewal,
+  } = useMemo(() => {
+    const getNodeBilling = (node: VPSNode) =>
+      formatNodeBilling(
+        {
+          price: node.price,
+          currency: node.currency,
+          billingCycle: node.billingCycle,
+          expiredAt: node.expiredAt,
+        },
+        billingLabels,
+      );
 
-  const getPricePart = (node: VPSNode) =>
-    formatPricePart(
-      node.price,
-      node.currency,
-      node.billingCycle,
-      billingLabels,
-    );
+    const getPricePart = (node: VPSNode) =>
+      formatPricePart(
+        node.price,
+        node.currency,
+        node.billingCycle,
+        billingLabels,
+      );
 
-  const getPlainPricePart = (node: VPSNode) => {
-    if (node.price === 0) return null;
-    if (node.price === -1) return billingLabels.billingFree;
-    return `${node.currency}${node.price} / ${formatBillingCycleSuffix(
-      node.billingCycle,
-      billingLabels,
-    )}`;
-  };
+    const getPlainPricePart = (node: VPSNode) => {
+      if (node.price === 0) return null;
+      if (node.price === -1) return billingLabels.billingFree;
+      return `${node.currency}${node.price} / ${formatBillingCycleSuffix(
+        node.billingCycle,
+        billingLabels,
+      )}`;
+    };
 
-  const renderBilling = (node: VPSNode) => {
-    const billing = getNodeBilling(node);
-    const pricePart = getPricePart(node);
-    const plainPricePart = getPlainPricePart(node);
-    const longTermText =
-      billing.expiryKind === "long_term"
-        ? (plainPricePart ?? billingLabels.billingHidden)
-        : billing.text;
-    const urgentClass = billing.isExpired
-      ? "text-zen-danger font-bold"
-      : billing.isUrgent
+    const renderBilling = (node: VPSNode) => {
+      const billing = getNodeBilling(node);
+      const pricePart = getPricePart(node);
+      const plainPricePart = getPlainPricePart(node);
+      const longTermText =
+        billing.expiryKind === "long_term"
+          ? (plainPricePart ?? billingLabels.billingHidden)
+          : billing.text;
+      const urgentClass = billing.isExpired
         ? "text-zen-danger font-bold"
-        : "";
-    return (
-      <span className={`${textPrimary} font-bold ${urgentClass}`}>
-        {longTermText}
-      </span>
-    );
-  };
+        : billing.isUrgent
+          ? "text-zen-danger font-bold"
+          : "";
+      return (
+        <span className={`${textPrimary} font-bold ${urgentClass}`}>
+          {longTermText}
+        </span>
+      );
+    };
 
-  const isLongTermBilling = (node: VPSNode) =>
-    getNodeBilling(node).expiryKind === "long_term";
+    const isLongTermBilling = (node: VPSNode) =>
+      getNodeBilling(node).expiryKind === "long_term";
 
-  const shouldShowAutoRenewal = (node: VPSNode) =>
-    showAutoRenewal &&
-    typeof node.autoRenewal === "boolean" &&
-    !isLongTermBilling(node);
+    const shouldShowAutoRenewal = (node: VPSNode) =>
+      showAutoRenewal &&
+      typeof node.autoRenewal === "boolean" &&
+      !isLongTermBilling(node);
 
-  const autoRenewalText = (node: VPSNode) =>
-    node.autoRenewal ? t.autoRenewalEnabled : t.autoRenewalDisabled;
+    const autoRenewalText = (node: VPSNode) =>
+      node.autoRenewal ? t.autoRenewalEnabled : t.autoRenewalDisabled;
 
-  const autoRenewalBadgeClass = (node: VPSNode) =>
-    node.autoRenewal
-      ? "border-zen-success/25 bg-zen-success/10 text-zen-success"
-      : "border-zen-fg-faint/20 bg-zen-fill-muted/15 text-zen-fg-subtle";
+    const autoRenewalBadgeClass = (node: VPSNode) =>
+      node.autoRenewal
+        ? "border-zen-success/25 bg-zen-success/10 text-zen-success"
+        : "border-zen-fg-faint/20 bg-zen-fill-muted/15 text-zen-fg-subtle";
 
-  const billingBadgeClass = (node: VPSNode) =>
-    isLongTermBilling(node)
-      ? "border-zen-accent/30 bg-zen-accent/12 text-zen-accent"
-      : autoRenewalBadgeClass(node);
+    const billingBadgeClass = (node: VPSNode) =>
+      isLongTermBilling(node)
+        ? "border-zen-accent/30 bg-zen-accent/12 text-zen-accent"
+        : autoRenewalBadgeClass(node);
 
-  const billingBadgeText = (node: VPSNode) =>
-    isLongTermBilling(node) ? t.billingLongTermBadge : autoRenewalText(node);
+    const billingBadgeText = (node: VPSNode) =>
+      isLongTermBilling(node) ? t.billingLongTermBadge : autoRenewalText(node);
 
-  const shouldShowBillingBadge = (node: VPSNode) =>
-    isLongTermBilling(node) || shouldShowAutoRenewal(node);
+    const shouldShowBillingBadge = (node: VPSNode) =>
+      isLongTermBilling(node) || shouldShowAutoRenewal(node);
 
-  const renderBillingBadge = (node: VPSNode) => {
-    if (!shouldShowBillingBadge(node)) return null;
-    return (
+    const renderBillingBadge = (node: VPSNode) => {
+      if (!shouldShowBillingBadge(node)) return null;
+      return (
+        <span
+          className={`inline-flex shrink-0 rounded-sm border px-1 py-px font-mono ${zenType.micro} font-bold tracking-wide leading-none ${billingBadgeClass(node)}`}
+        >
+          {billingBadgeText(node)}
+        </span>
+      );
+    };
+
+    const renderBillingWithAutoRenewal = (node: VPSNode, compact = false) => (
       <span
-        className={`inline-flex shrink-0 rounded-sm border px-1 py-px font-mono ${zenType.micro} font-bold tracking-wide leading-none ${billingBadgeClass(node)}`}
+        className={`inline-flex min-w-0 items-baseline ${compact ? "gap-1.5" : "gap-2"} ${compact ? "justify-end" : ""}`}
       >
-        {billingBadgeText(node)}
-      </span>
-    );
-  };
-
-  const renderBillingWithAutoRenewal = (node: VPSNode, compact = false) => (
-    <span
-      className={`inline-flex min-w-0 items-baseline ${compact ? "gap-1.5" : "gap-2"} ${compact ? "justify-end" : ""}`}
-    >
-      <span className="min-w-0">{renderBilling(node)}</span>
-      {renderBillingBadge(node)}
-    </span>
-  );
-
-  const renderTableBilling = (node: VPSNode) => {
-    const billing = getNodeBilling(node);
-    const urgentClass = billing.isExpired
-      ? "text-zen-danger font-bold"
-      : billing.isUrgent
-        ? "text-zen-danger font-bold"
-        : "";
-    const pricePart = getPricePart(node);
-    const plainPricePart = getPlainPricePart(node);
-    const hidden = `(${billingLabels.billingHidden})`;
-    const trailingPrice = pricePart ?? hidden;
-
-    let mainText = billing.text;
-    let suffixText = "";
-    if (billing.expiryKind === "active" || billing.expiryKind === "expired") {
-      mainText = `${billing.daysRemaining} ${billingLabels.unitDays}`;
-      suffixText = trailingPrice;
-    } else if (billing.expiryKind === "long_term") {
-      mainText = plainPricePart ?? billingLabels.billingHidden;
-    } else if (billing.expiryKind === "none" && pricePart) {
-      mainText = billingLabels.billingNotSet;
-      suffixText = pricePart;
-    }
-
-    return (
-      <span
-        className={`inline-flex min-w-0 items-baseline gap-2 ${textPrimary} font-bold ${urgentClass}`}
-      >
-        <span>{mainText}</span>
-        {suffixText ? <span>{suffixText}</span> : null}
+        <span className="min-w-0">{renderBilling(node)}</span>
         {renderBillingBadge(node)}
       </span>
     );
-  };
 
-  const renderTrafficValue = (node: VPSNode) => (
-    <span className="inline-flex items-center gap-1.5 min-w-0">
-      <span className="truncate">{formatNodeTraffic(node)}</span>
-      {node.bandwidthTotal <= 0 ? (
+    const renderTableBilling = (node: VPSNode) => {
+      const billing = getNodeBilling(node);
+      const urgentClass = billing.isExpired
+        ? "text-zen-danger font-bold"
+        : billing.isUrgent
+          ? "text-zen-danger font-bold"
+          : "";
+      const pricePart = getPricePart(node);
+      const plainPricePart = getPlainPricePart(node);
+      const hidden = `(${billingLabels.billingHidden})`;
+      const trailingPrice = pricePart ?? hidden;
+
+      let mainText = billing.text;
+      let suffixText = "";
+      if (billing.expiryKind === "active" || billing.expiryKind === "expired") {
+        mainText = `${billing.daysRemaining} ${billingLabels.unitDays}`;
+        suffixText = trailingPrice;
+      } else if (billing.expiryKind === "long_term") {
+        mainText = plainPricePart ?? billingLabels.billingHidden;
+      } else if (billing.expiryKind === "none" && pricePart) {
+        mainText = billingLabels.billingNotSet;
+        suffixText = pricePart;
+      }
+
+      return (
         <span
-          className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-bold tracking-wide leading-none ${unlimitedTrafficBadgeClass}`}
+          className={`inline-flex min-w-0 items-baseline gap-2 ${textPrimary} font-bold ${urgentClass}`}
         >
-          <span className={unlimitedTrafficSymbolClass}>∞</span>
+          <span>{mainText}</span>
+          {suffixText ? <span>{suffixText}</span> : null}
+          {renderBillingBadge(node)}
         </span>
-      ) : (
-        <span
-          className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-bold tracking-wide leading-none ${trafficTypeBadgeClass(node.trafficLimitType)}`}
-        >
-          {getTrafficTypeShortLabel(node.trafficLimitType)}
-        </span>
-      )}
-    </span>
-  );
+      );
+    };
+    return {
+      renderTableBilling,
+      shouldShowBillingBadge,
+      renderBillingWithAutoRenewal,
+    };
+  }, [billingLabels, showAutoRenewal, t]);
 
   const nodeGroups = useMemo(() => {
     return collectNodeGroups(nodes);
@@ -538,6 +992,7 @@ export function NodeTable({
       setSearchParams(
         (previous) => {
           const next = new URLSearchParams(previous);
+          next.delete("page");
           const query = searchTerm.trim();
           if (query) next.set("q", query);
           else next.delete("q");
@@ -549,26 +1004,30 @@ export function NodeTable({
     return () => window.clearTimeout(timer);
   }, [searchTerm, setSearchParams]);
 
-  const setSortPreference = useCallback((field: SortField, order: SortOrder) => {
-    setSearchParams(
-      (previous) => {
-        const next = new URLSearchParams(previous);
-        if (field === "default") {
-          if (mappedDefaultSort !== "default") {
-            next.set("sort", "default");
+  const setSortPreference = useCallback(
+    (field: SortField, order: SortOrder) => {
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          next.delete("page");
+          if (field === "default") {
+            if (mappedDefaultSort !== "default") {
+              next.set("sort", "default");
+            } else {
+              next.delete("sort");
+            }
+            next.delete("order");
           } else {
-            next.delete("sort");
+            next.set("sort", field);
+            next.set("order", order);
           }
-          next.delete("order");
-        } else {
-          next.set("sort", field);
-          next.set("order", order);
-        }
-        return next;
-      },
-      { replace: true },
-    );
-  }, [mappedDefaultSort, setSearchParams]);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [mappedDefaultSort, setSearchParams],
+  );
 
   useEffect(() => {
     if (
@@ -600,7 +1059,9 @@ export function NodeTable({
     const scroller = groupScrollRef.current;
     if (!scroller) return;
     refreshGroupScrollFade();
-    scroller.addEventListener("scroll", refreshGroupScrollFade, { passive: true });
+    scroller.addEventListener("scroll", refreshGroupScrollFade, {
+      passive: true,
+    });
     const ro = new ResizeObserver(refreshGroupScrollFade);
     ro.observe(scroller);
     return () => {
@@ -612,7 +1073,9 @@ export function NodeTable({
   useEffect(() => {
     const scroller = groupScrollRef.current;
     if (!scroller) return;
-    const activeChip = scroller.querySelector<HTMLElement>("[data-group-active='true']");
+    const activeChip = scroller.querySelector<HTMLElement>(
+      "[data-group-active='true']",
+    );
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
@@ -651,31 +1114,83 @@ export function NodeTable({
     () => sortNodeList(filteredNodes, sortField, sortOrder, billingLabels),
     [filteredNodes, sortField, sortOrder, billingLabels],
   );
+  const pageSize = 100;
+  const pageCount = Math.max(1, Math.ceil(sortedNodes.length / pageSize));
+  const requestedPage = Number(searchParams.get("page") ?? 1);
+  const page = Math.min(
+    pageCount,
+    Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? requestedPage
+      : 1,
+  );
+  const pageNodes = useMemo(
+    () => sortedNodes.slice((page - 1) * pageSize, page * pageSize),
+    [sortedNodes, page],
+  );
+  const changePage = (value: number) => {
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value <= 1) next.delete("page");
+        else next.set("page", String(value));
+        return next;
+      },
+      { replace: true },
+    );
+    nodeDisplayRef.current?.scrollIntoView({ block: "start" });
+  };
+  const pagination =
+    pageCount > 1 ? (
+      <nav
+        aria-label={t.nodePages}
+        className="flex flex-wrap items-center justify-end gap-3 border-t border-zen-line pt-3 font-mono text-sm"
+      >
+        <button
+          type="button"
+          disabled={page <= 1}
+          onClick={() => changePage(page - 1)}
+          className="min-h-10 rounded-md border border-zen-border px-3 hover:border-zen-accent hover:text-zen-accent disabled:cursor-default disabled:opacity-35"
+        >
+          {t.previousPage}
+        </button>
+        <span aria-live="polite" className="tabular-nums text-zen-fg-muted">
+          {page} / {pageCount}
+        </span>
+        <button
+          type="button"
+          disabled={page >= pageCount}
+          onClick={() => changePage(page + 1)}
+          className="min-h-10 rounded-md border border-zen-border px-3 hover:border-zen-accent hover:text-zen-accent disabled:cursor-default disabled:opacity-35"
+        >
+          {t.nextPage}
+        </button>
+      </nav>
+    ) : null;
   const {
     displayedItems: displayedNodes,
     className: collectionMotionClass,
     transitioning: collectionTransitioning,
   } = useCollectionTransition(
-    sortedNodes,
-    `${effectiveViewMode}:${activeGroup}`,
+    pageNodes,
+    `${effectiveViewMode}:${activeGroup}:${page}`,
   );
 
-  const listColSpan =
-    (latencyVisible ? 1 : 0) +
-    (showExpiryTime ? 1 : 0) +
-    7;
+  const listColSpan = (latencyVisible ? 1 : 0) + (showExpiryTime ? 1 : 0) + 7;
 
-  const handleSort = useCallback((field: SortField) => {
-    if (sortField === field) {
-      if (sortOrder === "desc") {
-        setSortPreference(field, "asc");
+  const handleSort = useCallback(
+    (field: SortField) => {
+      if (sortField === field) {
+        if (sortOrder === "desc") {
+          setSortPreference(field, "asc");
+        } else {
+          setSortPreference("default", initialSortOrder);
+        }
       } else {
-        setSortPreference("default", initialSortOrder);
+        setSortPreference(field, "desc");
       }
-    } else {
-      setSortPreference(field, "desc");
-    }
-  }, [initialSortOrder, setSortPreference, sortField, sortOrder]);
+    },
+    [initialSortOrder, setSortPreference, sortField, sortOrder],
+  );
 
   const handleNodeContainerClick = useCallback(
     (event: React.MouseEvent, node: VPSNode) => {
@@ -699,14 +1214,11 @@ export function NodeTable({
   };
 
   // Styling helpers
-  const textPrimary = zenText.primary;
-  const textMuted = zenText.muted;
   const borderBottomClass = "border-zen-line-strong";
   const toolbarPanelClass = "border-zen-border-muted bg-zen-elevate/15";
   const groupChipIdle =
     "border border-zen-border text-zen-fg-subtle hover:border-zen-fg-muted hover:text-zen-fg-strong";
-  const segmentTrackClass =
-    "border border-zen-border bg-zen-fill-muted/30";
+  const segmentTrackClass = "border border-zen-border bg-zen-fill-muted/30";
 
   const groupTabItems = useMemo(
     () => [
@@ -773,172 +1285,188 @@ export function NodeTable({
     };
 
     return (
-    <div
-      className={`${zenType.label} tracking-[0.2em] ${textMuted} flex flex-wrap justify-between items-center gap-x-4 gap-y-2 uppercase font-mono ${
-        mobileFooter ? "pt-3 border-t border-zen-line-strong" : "sm:items-baseline tracking-[0.25em]"
-      }`}
-    >
-      <span>
-        {t.matchingInstances}: {displayedNodes.length} / {nodes.length}
-      </span>
-      <div className="flex items-center gap-2 relative z-30">
-        <span>{t.sort}:</span>
-        <div className="relative inline-block text-left">
-          <button
-            type="button"
-            ref={triggerRef}
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-            aria-controls={menuOpen ? menuId : undefined}
-            onClick={() =>
-              setOpenSortMenu((open) => (open === placement ? null : placement))
-            }
-            className={`min-h-11 cursor-pointer select-none font-bold flex items-center gap-1 uppercase leading-none transition-[color,transform] duration-300 ease-[cubic-bezier(0.34,1.45,0.64,1)] active:scale-[0.97] ${
-              menuOpen ? "text-zen-accent" : textPrimary
-            }`}
-          >
-            {getFieldLabel(sortField)}
-            {sortField !== "default" ? (
-              <span
-                className="normal-case tracking-normal opacity-75 transition-transform duration-300"
-                aria-label={sortOrder === "asc" ? t.sortAsc : t.sortDesc}
-              >
-                {getSortOrderIcon(sortOrder)}
-              </span>
-            ) : null}
-          </button>
-          {menuOpen && (
-            <>
-              <div
-                className="fixed inset-0 z-40 cursor-default"
-                aria-hidden="true"
-                onClick={() => setOpenSortMenu(null)}
-              />
-              <div
-                id={menuId}
-                ref={menuRef}
-                role="menu"
-                aria-label={t.selectSortMetric}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.preventDefault();
-                    closeAndRestoreFocus();
-                    return;
-                  }
-                  if (
-                    event.key !== "ArrowDown" &&
-                    event.key !== "ArrowUp" &&
-                    event.key !== "Home" &&
-                    event.key !== "End"
-                  ) {
-                    return;
-                  }
-                  event.preventDefault();
-                  const items = [
-                    ...(event.currentTarget.querySelectorAll(
-                      "button:not(:disabled)",
-                    ) as NodeListOf<HTMLButtonElement>),
-                  ];
-                  if (items.length === 0) return;
-                  const current = Math.max(
-                    0,
-                    items.indexOf(document.activeElement as HTMLButtonElement),
-                  );
-                  const next = event.key === "Home"
-                    ? 0
-                    : event.key === "End"
-                      ? items.length - 1
-                      : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
-                        items.length;
-                  items[next]?.focus();
-                }}
-                onBlur={(event) => {
-                  const next = event.relatedTarget;
-                  if (
-                    next instanceof Node &&
-                    (event.currentTarget.contains(next) ||
-                      triggerRef.current?.contains(next))
-                  ) {
-                    return;
-                  }
-                  setOpenSortMenu(null);
-                }}
-                className={`absolute right-0 top-full z-50 w-44 border overflow-hidden ${zenMotion.menuPanel} ${
-                theme === "dark"
-                  ? "bg-zen-bg border-zen-border-muted text-zen-fg-muted"
-                  : "bg-zen-bg border-zen-border text-zen-fg-strong"
+      <div
+        className={`${zenType.label} tracking-[0.2em] ${textMuted} flex flex-wrap justify-between items-center gap-x-4 gap-y-2 uppercase font-mono ${
+          mobileFooter
+            ? "pt-3 border-t border-zen-line-strong"
+            : "sm:items-baseline tracking-[0.25em]"
+        }`}
+      >
+        <span>
+          {t.matchingInstances}: {filteredNodes.length} / {nodes.length}
+        </span>
+        <div className="flex items-center gap-2 relative z-30">
+          <span>{t.sort}:</span>
+          <div className="relative inline-block text-left">
+            <button
+              type="button"
+              ref={triggerRef}
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              aria-controls={menuOpen ? menuId : undefined}
+              onClick={() =>
+                setOpenSortMenu((open) =>
+                  open === placement ? null : placement,
+                )
+              }
+              className={`min-h-11 cursor-pointer select-none font-bold flex items-center gap-1 uppercase leading-none transition-[color,transform] duration-300 ease-[cubic-bezier(0.34,1.45,0.64,1)] active:scale-[0.97] ${
+                menuOpen ? "text-zen-accent" : textPrimary
               }`}
-              >
-                <div className={`px-2.5 py-1.5 border-b ${zenType.micro} zen-track-tight font-bold ${
-                  "border-zen-border-muted text-zen-fg-subtle"
-                }`}>
-                  {t.selectSortMetric}
-                </div>
-                <div className="py-1">
-                  {sortOptions.map((opt) => {
-                    const isCurrent = sortField === opt.value;
-                    return (
-                      <button
-                        type="button"
-                        key={opt.value}
-                        role="menuitemradio"
-                        aria-checked={isCurrent}
-                        onClick={() => {
-                          if (opt.value === "default") {
-                            setSortPreference("default", initialSortOrder);
-                          } else if (isCurrent) {
-                            if (sortOrder === "desc") {
-                              setSortPreference(opt.value, "asc");
-                            } else {
-                              setSortPreference("default", initialSortOrder);
-                            }
-                          } else {
-                            setSortPreference(opt.value, "desc");
-                          }
-                          closeAndRestoreFocus();
-                        }}
-                        className={`w-full text-left px-3 py-2 md:py-1.5 ${zenType.caption} tracking-wider uppercase font-mono transition-colors flex items-center justify-between ${
-                          isCurrent
-                            ? "bg-zen-fill-muted/12 text-zen-accent font-bold"
-                            : "hover:bg-zen-fill-muted/10"
-                        }`}
-                      >
-                        <span>{opt.label}</span>
-                        {isCurrent && opt.value !== "default" && (
-                          <span className={`text-zen-accent ${zenType.micro}`}>
-                            {getSortOrderIcon(sortOrder)}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="border-t p-1 border-zen-line">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={sortField === "default"}
-                    onClick={() => {
-                      if (sortField !== "default") {
-                        setSortPreference(
-                          sortField,
-                          sortOrder === "asc" ? "desc" : "asc",
-                        );
-                      }
+            >
+              {getFieldLabel(sortField)}
+              {sortField !== "default" ? (
+                <span
+                  className="normal-case tracking-normal opacity-75 transition-transform duration-300"
+                  aria-label={sortOrder === "asc" ? t.sortAsc : t.sortDesc}
+                >
+                  {getSortOrderIcon(sortOrder)}
+                </span>
+              ) : null}
+            </button>
+            {menuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40 cursor-default"
+                  aria-hidden="true"
+                  onClick={() => setOpenSortMenu(null)}
+                />
+                <div
+                  id={menuId}
+                  ref={menuRef}
+                  role="menu"
+                  aria-label={t.selectSortMetric}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.preventDefault();
                       closeAndRestoreFocus();
-                    }}
-                    aria-label={sortOrder === "asc" ? t.setSortDescending : t.setSortAscending}
-                    className={`w-full min-h-9 text-center px-1 py-1 ${zenType.caption} uppercase font-bold tracking-widest text-zen-accent hover:underline transition-all disabled:cursor-not-allowed disabled:opacity-40`}
+                      return;
+                    }
+                    if (
+                      event.key !== "ArrowDown" &&
+                      event.key !== "ArrowUp" &&
+                      event.key !== "Home" &&
+                      event.key !== "End"
+                    ) {
+                      return;
+                    }
+                    event.preventDefault();
+                    const items = [
+                      ...(event.currentTarget.querySelectorAll(
+                        "button:not(:disabled)",
+                      ) as NodeListOf<HTMLButtonElement>),
+                    ];
+                    if (items.length === 0) return;
+                    const current = Math.max(
+                      0,
+                      items.indexOf(
+                        document.activeElement as HTMLButtonElement,
+                      ),
+                    );
+                    const next =
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? items.length - 1
+                          : (current +
+                              (event.key === "ArrowDown" ? 1 : -1) +
+                              items.length) %
+                            items.length;
+                    items[next]?.focus();
+                  }}
+                  onBlur={(event) => {
+                    const next = event.relatedTarget;
+                    if (
+                      next instanceof Node &&
+                      (event.currentTarget.contains(next) ||
+                        triggerRef.current?.contains(next))
+                    ) {
+                      return;
+                    }
+                    setOpenSortMenu(null);
+                  }}
+                  className={`absolute right-0 top-full z-50 w-44 border overflow-hidden ${zenMotion.menuPanel} ${
+                    theme === "dark"
+                      ? "bg-zen-bg border-zen-border-muted text-zen-fg-muted"
+                      : "bg-zen-bg border-zen-border text-zen-fg-strong"
+                  }`}
+                >
+                  <div
+                    className={`px-2.5 py-1.5 border-b ${zenType.micro} zen-track-tight font-bold ${"border-zen-border-muted text-zen-fg-subtle"}`}
                   >
-                    [ {getSortOrderIcon(sortOrder === "asc" ? "desc" : "asc")} ]
-                  </button>
+                    {t.selectSortMetric}
+                  </div>
+                  <div className="py-1">
+                    {sortOptions.map((opt) => {
+                      const isCurrent = sortField === opt.value;
+                      return (
+                        <button
+                          type="button"
+                          key={opt.value}
+                          role="menuitemradio"
+                          aria-checked={isCurrent}
+                          onClick={() => {
+                            if (opt.value === "default") {
+                              setSortPreference("default", initialSortOrder);
+                            } else if (isCurrent) {
+                              if (sortOrder === "desc") {
+                                setSortPreference(opt.value, "asc");
+                              } else {
+                                setSortPreference("default", initialSortOrder);
+                              }
+                            } else {
+                              setSortPreference(opt.value, "desc");
+                            }
+                            closeAndRestoreFocus();
+                          }}
+                          className={`w-full text-left px-3 py-2 md:py-1.5 ${zenType.caption} tracking-wider uppercase font-mono transition-colors flex items-center justify-between ${
+                            isCurrent
+                              ? "bg-zen-fill-muted/12 text-zen-accent font-bold"
+                              : "hover:bg-zen-fill-muted/10"
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {isCurrent && opt.value !== "default" && (
+                            <span
+                              className={`text-zen-accent ${zenType.micro}`}
+                            >
+                              {getSortOrderIcon(sortOrder)}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t p-1 border-zen-line">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={sortField === "default"}
+                      onClick={() => {
+                        if (sortField !== "default") {
+                          setSortPreference(
+                            sortField,
+                            sortOrder === "asc" ? "desc" : "asc",
+                          );
+                        }
+                        closeAndRestoreFocus();
+                      }}
+                      aria-label={
+                        sortOrder === "asc"
+                          ? t.setSortDescending
+                          : t.setSortAscending
+                      }
+                      className={`w-full min-h-9 text-center px-1 py-1 ${zenType.caption} uppercase font-bold tracking-widest text-zen-accent hover:underline transition-all disabled:cursor-not-allowed disabled:opacity-40`}
+                    >
+                      [ {getSortOrderIcon(sortOrder === "asc" ? "desc" : "asc")}{" "}
+                      ]
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
     );
   };
 
@@ -947,7 +1475,10 @@ export function NodeTable({
   }, []);
 
   return (
-    <div className={`km-node-display w-full space-y-6 lg:space-y-8 font-sans ${zenType.body} ${zenText.primary}`}>
+    <div
+      ref={nodeDisplayRef}
+      className={`km-node-display w-full space-y-6 lg:space-y-8 font-sans ${zenType.body} ${zenText.primary}`}
+    >
       {/* Mobile toolbar card */}
       <div
         className={`space-y-4 lg:hidden rounded-xl border p-4 ${toolbarPanelClass}`}
@@ -956,17 +1487,13 @@ export function NodeTable({
           <div className="relative min-w-0">
             {groupScrollFade.left ? (
               <div
-                className={`pointer-events-none absolute inset-y-0 left-0 z-[1] w-3 bg-gradient-to-r ${
-                  "from-zen-bg/80"
-                } to-transparent`}
+                className={`pointer-events-none absolute inset-y-0 left-0 z-[1] w-3 bg-gradient-to-r ${"from-zen-bg/80"} to-transparent`}
                 aria-hidden
               />
             ) : null}
             {groupScrollFade.right ? (
               <div
-                className={`pointer-events-none absolute inset-y-0 right-0 z-[1] w-5 bg-gradient-to-l ${
-                  "from-zen-bg/80"
-                } to-transparent`}
+                className={`pointer-events-none absolute inset-y-0 right-0 z-[1] w-5 bg-gradient-to-l ${"from-zen-bg/80"} to-transparent`}
                 aria-hidden
               />
             ) : null}
@@ -987,10 +1514,14 @@ export function NodeTable({
 
         <div className="flex flex-col gap-3 font-mono">
           <div className="flex items-center justify-between gap-3">
-            <span className={`${zenType.label} ${textMuted} shrink-0 tracking-[0.18em] uppercase`}>
+            <span
+              className={`${zenType.label} ${textMuted} shrink-0 tracking-[0.18em] uppercase`}
+            >
               {t.viewMode}
             </span>
-            <div className={`inline-flex rounded-full p-0.5 ${segmentTrackClass}`}>
+            <div
+              className={`inline-flex rounded-full p-0.5 ${segmentTrackClass}`}
+            >
               <ZenTabControl
                 ariaLabel={t.viewMode}
                 variant="pill"
@@ -1063,8 +1594,12 @@ export function NodeTable({
           )}
 
           <div className="flex h-8 shrink-0 flex-nowrap items-center gap-x-8 font-mono">
-            <div className={`flex h-8 items-center gap-3 ${zenType.caption} tracking-[0.2em] uppercase`}>
-              <span className={`${textMuted} shrink-0 leading-none`}>{t.viewMode}:</span>
+            <div
+              className={`flex h-8 items-center gap-3 ${zenType.caption} tracking-[0.2em] uppercase`}
+            >
+              <span className={`${textMuted} shrink-0 leading-none`}>
+                {t.viewMode}:
+              </span>
               <ZenTabControl
                 ariaLabel={t.viewMode}
                 tabs={viewModeTabs.map((tab) => ({
@@ -1081,7 +1616,9 @@ export function NodeTable({
             </div>
 
             <div className="flex h-8 items-center gap-2">
-              <span className={`${zenType.label} ${textMuted} shrink-0 leading-none tracking-[0.2em] uppercase`}>
+              <span
+                className={`${zenType.label} ${textMuted} shrink-0 leading-none tracking-[0.2em] uppercase`}
+              >
                 {t.search}:
               </span>
               <div
@@ -1119,6 +1656,7 @@ export function NodeTable({
         {renderStatsBar(false)}
       </div>
 
+      {pagination}
       {/* VIEW STATE 1: HIGH-DENSITY BULLET-ALIGNED LIST VIEW */}
       {effectiveViewMode === "list" ? (
         <div
@@ -1127,7 +1665,9 @@ export function NodeTable({
         >
           <table className="km-ui-table w-full min-w-[1100px] text-left border-collapse">
             <thead>
-              <tr className={`${textMuted} ${zenType.caption} zen-track-tight uppercase border-b ${borderBottomClass} whitespace-nowrap`}>
+              <tr
+                className={`${textMuted} ${zenType.caption} zen-track-tight uppercase border-b ${borderBottomClass} whitespace-nowrap`}
+              >
                 {renderSortHeader("name", t.name)}
                 {renderSortHeader("os", t.os)}
                 {renderSortHeader("cpu", t.cpu)}
@@ -1142,199 +1682,30 @@ export function NodeTable({
             <tbody className={`${zenType.data} font-mono whitespace-nowrap`}>
               {displayedNodes.length === 0 ? (
                 <tr>
-                  <td colSpan={listColSpan} className={`py-16 text-center ${textMuted} italic uppercase tracking-[0.2em] font-sans`}>
-                     {t.noInstances}
+                  <td
+                    colSpan={listColSpan}
+                    className={`py-16 text-center ${textMuted} italic uppercase tracking-[0.2em] font-sans`}
+                  >
+                    {t.noInstances}
                   </td>
                 </tr>
               ) : (
-                displayedNodes.map((node) => {
-                  const cpuColor =
-                    node.cpuUsage > 75
-                      ? "text-zen-danger font-bold" 
-                      : node.cpuUsage > 40 
-                      ? "text-zen-warning font-bold" 
-                      : textPrimary;
-
-                  const memPercent = safePercent(
-                    node.memoryUsed,
-                    node.memoryTotal,
-                  );
-                  const memColor =
-                    memPercent > 80
-                      ? "text-zen-danger font-bold" 
-                      : memPercent > 50 
-                      ? "text-zen-warning font-bold" 
-                      : textPrimary;
-
-                  const diskPercent = safePercent(
-                    node.diskUsed,
-                    node.diskTotal,
-                  );
-                  const diskColor =
-                    diskPercent > 80
-                      ? "text-zen-danger font-bold" 
-                      : diskPercent > 50 
-                      ? "text-zen-warning font-bold" 
-                      : textPrimary;
-
-                  return (
-                    <tr
-                      key={node.id}
-                      onClick={(event) => handleNodeContainerClick(event, node)}
-                      className={`km-ui-table-row cursor-pointer group border-b border-zen-line hover:bg-zen-elevate transition-[background-color,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                        node.status === "offline"
-                          ? "bg-zen-fill-muted/10 text-zen-fg-muted"
-                          : node.status === "unknown"
-                            ? "bg-zen-warning/[0.04]"
-                            : ""
-                      }`}
-                    >
-                      {/* Identification */}
-                      <td className={`py-3 px-2 font-sans font-black ${textPrimary}`}>
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Flag flag={node.flag} className="w-4 h-4 shrink-0" />
-                            <Link
-                              to={`/instance/${encodeURIComponent(node.id)}`}
-                              state={{ fromDashboard: true }}
-                              className="min-w-0 flex-1 truncate max-w-[240px] md:max-w-[200px] hover:text-zen-accent hover:underline underline-offset-2"
-                              title={node.name}
-                            >
-                              {node.name}
-                            </Link>
-                            {node.status !== "online" ? (
-                              <span
-                                className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-bold ${
-                                  node.status === "unknown"
-                                    ? "border-zen-warning/40 text-zen-warning"
-                                    : "border-zen-border-muted text-zen-fg-muted"
-                                }`}
-                              >
-                                {node.status === "unknown"
-                                  ? t.statusUnknown
-                                  : t.connectionOffline}
-                              </span>
-                            ) : null}
-                            <PublicRemarkButton
-                              publicRemark={node.publicRemark}
-                              privateRemark={node.privateRemark}
-                              theme={theme}
-                              publicLabel={t.publicRemark}
-                              privateLabel={t.privateRemark}
-                              className="shrink-0 ml-auto"
-                            />
-                          </div>
-                          <NodeTags
-                            tags={node.tags}
-                            theme={theme}
-                            size="sm"
-                            maxVisible={2}
-                          />
-                        </div>
-                      </td>
- 
-                      {/* OS Specific */}
-                      <td className={`py-3 px-2 ${textMuted} ${zenType.data} whitespace-nowrap`}>
-                        {(() => {
-                          const osDetails = getOSDetails(node.os, node.arch);
-                          return (
-                            <span className="flex items-center gap-2 inline-flex">
-                              <OsIcon os={node.os} />
-                              <span>{osDetails.text}</span>
-                            </span>
-                          );
-                        })()}
-                      </td>
- 
-                      {/* CPU Live Load */}
-                      <td className="py-3 px-2">
-                        {node.online ? (
-                          <MetricAsciiBar
-                            percent={node.cpuUsage}
-                            colorClass={cpuColor}
-                            textPrimaryClass={textPrimary}
-                          />
-                        ) : (
-                          "---"
-                        )}
-                      </td>
-
-                      {/* Memory Usage */}
-                      <td className="py-3 px-2">
-                        {node.online ? (
-                          <MetricAsciiBar
-                            percent={memPercent}
-                            colorClass={memColor}
-                            textPrimaryClass={textPrimary}
-                          />
-                        ) : (
-                          "---"
-                        )}
-                      </td>
-
-                      {/* Root Disk Usage */}
-                      <td className={`py-3 px-2`}>
-                        {node.online ? (
-                          <MetricAsciiBar
-                            percent={diskPercent}
-                            colorClass={diskColor}
-                            textPrimaryClass={textPrimary}
-                          />
-                        ) : (
-                          "---"
-                        )}
-                      </td>
-
-                      {/* Ping Latency */}
-                      {latencyVisible && (
-                      <td className="py-3 px-2">
-                        {node.online && node.latency > 0 ? (
-                          <LatencyHistoryBlocks
-                            samples={node.latencyHistory}
-                            currentMs={node.latency}
-                            theme={theme}
-                            textPrimary={textPrimary}
-                            colorConfig={latencyColorConfig}
-                            historyLabel={t.latencyHistoryAria}
-                            onValueClick={() => openLatencyModal(node)}
-                          />
-                        ) : (
-                          <span className={textMuted}>—</span>
-                        )}
-                      </td>
-                      )}
-
-                      {/* Bandwidth Speed */}
-                      <td className="py-3 px-2">
-                        {node.online ? (
-                          <span className={`inline-flex items-baseline gap-x-2 font-bold ${textPrimary}`}>
-                            <span>↓ {formatSpeed(node.netSpeedIn)}</span>
-                            <span>↑ {formatSpeed(node.netSpeedOut)}</span>
-                          </span>
-                        ) : (
-                          "---"
-                        )}
-                      </td>
- 
-                      {/* Traffic Quantity */}
-                      <td className="py-3 px-2">
-                        {node.online ? (
-                          <span className={`font-bold ${textPrimary}`}>
-                            {renderTrafficValue(node)}
-                          </span>
-                        ) : (
-                          "---"
-                        )}
-                      </td>
-
-                      {showExpiryTime && (
-                        <td className={`py-3 px-2 ${zenType.data} font-bold`}>
-                          {renderTableBilling(node)}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
+                displayedNodes.map((node) => (
+                  <NodeListRow
+                    key={node.id}
+                    node={node}
+                    lang={lang}
+                    theme={theme}
+                    latencyVisible={latencyVisible}
+                    showExpiryTime={showExpiryTime}
+                    latencyColorConfig={latencyColorConfig}
+                    handleNodeContainerClick={handleNodeContainerClick}
+                    openLatencyModal={openLatencyModal}
+                    renderTableBilling={renderTableBilling}
+                    shouldShowBillingBadge={shouldShowBillingBadge}
+                    renderBillingWithAutoRenewal={renderBillingWithAutoRenewal}
+                  />
+                ))
               )}
             </tbody>
           </table>
@@ -1346,201 +1717,33 @@ export function NodeTable({
           aria-busy={collectionTransitioning}
         >
           {displayedNodes.length === 0 ? (
-            <div className={`col-span-full py-16 text-center ${textMuted} italic uppercase tracking-[0.2em] font-sans`}>
+            <div
+              className={`col-span-full py-16 text-center ${textMuted} italic uppercase tracking-[0.2em] font-sans`}
+            >
               {t.noInstances}
             </div>
           ) : (
-            displayedNodes.map((node) => {
-              const isSelected = selectedNodeId === node.id;
-              const cpuColor =
-                node.cpuUsage > 75
-                  ? "text-zen-danger font-bold"
-                  : node.cpuUsage > 40
-                    ? "text-zen-warning font-bold"
-                    : textPrimary;
-
-              const memPercent = safePercent(node.memoryUsed, node.memoryTotal);
-              const memColor =
-                memPercent > 80
-                  ? "text-zen-danger font-bold"
-                  : memPercent > 50
-                    ? "text-zen-warning font-bold"
-                    : textPrimary;
-
-              const diskPercent = safePercent(node.diskUsed, node.diskTotal);
-              const diskColor =
-                diskPercent > 80
-                  ? "text-zen-danger font-bold"
-                  : diskPercent > 50
-                    ? "text-zen-warning font-bold"
-                    : textPrimary;
-
-              return (
-                <article
-                  key={node.id}
-                  onClick={(event) => handleNodeContainerClick(event, node)}
-                  className={`km-node-card cursor-pointer group flex flex-col gap-3 p-4 sm:p-5 rounded-xl border border-zen-line bg-zen-elevate shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zen-line-strong hover:shadow-[0_4px_14px_rgba(0,0,0,0.06)] [content-visibility:auto] [contain-intrinsic-size:auto_320px] ${zenMotion.card} ${
-                    node.status === "offline"
-                      ? "bg-zen-fill-muted/10 text-zen-fg-muted"
-                      : node.status === "unknown"
-                        ? "border-zen-warning/35 bg-zen-warning/[0.04]"
-                        : ""
-                  }`}
-                >
-                  {/* Card header：标签与标题同一行，不额外占高 */}
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Flag flag={node.flag} className="w-5 h-5 shrink-0" />
-                    <h4
-                      className={`min-w-0 flex-1 truncate font-sans ${zenType.body} font-bold tracking-tight ${textPrimary}`}
-                      title={node.name}
-                    >
-                      <Link
-                        to={`/instance/${encodeURIComponent(node.id)}`}
-                        state={{ fromDashboard: true }}
-                        className="hover:text-zen-accent hover:underline underline-offset-2"
-                      >
-                        {node.name}
-                      </Link>
-                    </h4>
-                    {node.status !== "online" ? (
-                      <span
-                        className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-bold ${
-                          node.status === "unknown"
-                            ? "border-zen-warning/40 text-zen-warning"
-                            : "border-zen-border-muted text-zen-fg-muted"
-                        }`}
-                      >
-                        {node.status === "unknown"
-                          ? t.statusUnknown
-                          : t.connectionOffline}
-                      </span>
-                    ) : null}
-                    <NodeTags
-                      tags={node.tags}
-                      theme={theme}
-                      size="sm"
-                      maxVisible={2}
-                      className="shrink-0"
-                    />
-                    <PublicRemarkButton
-                      publicRemark={node.publicRemark}
-                      privateRemark={node.privateRemark}
-                      theme={theme}
-                      publicLabel={t.publicRemark}
-                      privateLabel={t.privateRemark}
-                      className="shrink-0"
-                    />
-                  </div>
-
-                  {/* Fully Localized pure text metric layout with pure language alignment */}
-                  <div className={`space-y-2 font-mono ${zenType.data} leading-relaxed uppercase ${textMuted}`}>
-                    <div className="flex justify-between">
-                      <span>{t.os}:</span>
-                      <span className={`font-bold ${textPrimary} flex items-center gap-2`}>
-                        {(() => {
-                          const osDetails = getOSDetails(node.os, node.arch);
-                          return (
-                            <>
-                              <OsIcon os={node.os} />
-                              <span>{osDetails.text}</span>
-                            </>
-                          );
-                        })()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{t.cpu}:</span>
-                      {node.online ? (
-                        <MetricAsciiBar
-                          percent={node.cpuUsage}
-                          colorClass={cpuColor}
-                          textPrimaryClass={textPrimary}
-                        />
-                      ) : (
-                        <span>---</span>
-                      )}
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{t.mem}:</span>
-                      {node.online ? (
-                        <MetricAsciiBar
-                          percent={memPercent}
-                          colorClass={memColor}
-                          textPrimaryClass={textPrimary}
-                        />
-                      ) : (
-                        <span>---</span>
-                      )}
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{t.diskspace}:</span>
-                      {node.online ? (
-                        <MetricAsciiBar
-                          percent={diskPercent}
-                          colorClass={diskColor}
-                          textPrimaryClass={textPrimary}
-                        />
-                      ) : (
-                        <span>---</span>
-                      )}
-                    </div>
-                    {latencyVisible && (
-                    <div className="flex justify-between">
-                      <span>{t.ping}:</span>
-                      {node.online && node.latency > 0 ? (
-                        <LatencyHistoryBlocks
-                          samples={node.latencyHistory}
-                          currentMs={node.latency}
-                          theme={theme}
-                          textPrimary={textPrimary}
-                          colorConfig={latencyColorConfig}
-                          historyLabel={t.latencyHistoryAria}
-                          onValueClick={() => openLatencyModal(node)}
-                        />
-                      ) : (
-                        <span>—</span>
-                      )}
-                    </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span>{t.bandwidth}:</span>
-                      {node.online ? (
-                        <span className={`inline-flex items-baseline gap-x-2 font-bold ${textPrimary}`}>
-                          <span>↓ {formatSpeed(node.netSpeedIn)}</span>
-                          <span>↑ {formatSpeed(node.netSpeedOut)}</span>
-                        </span>
-                      ) : (
-                        <span>---</span>
-                      )}
-                    </div>
-                    <div className="flex justify-between gap-2">
-                      <span className="shrink-0">{t.traffic}:</span>
-                      {node.online ? (
-                        <span className={`font-bold ${textPrimary} min-w-0 text-right`}>
-                          {renderTrafficValue(node)}
-                        </span>
-                      ) : (
-                        <span>---</span>
-                      )}
-                    </div>
-                    {showExpiryTime && (
-                      <div className="flex justify-between gap-2">
-                        <span className="shrink-0">
-                          {shouldShowBillingBadge(node) ? t.autoRenewal : t.expiry}:
-                        </span>
-                        <span className="min-w-0 text-right">
-                          {renderBillingWithAutoRenewal(node, true)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </article>
-              );
-            })
+            displayedNodes.map((node) => (
+              <NodeCard
+                key={node.id}
+                node={node}
+                lang={lang}
+                theme={theme}
+                latencyVisible={latencyVisible}
+                showExpiryTime={showExpiryTime}
+                latencyColorConfig={latencyColorConfig}
+                handleNodeContainerClick={handleNodeContainerClick}
+                openLatencyModal={openLatencyModal}
+                renderTableBilling={renderTableBilling}
+                shouldShowBillingBadge={shouldShowBillingBadge}
+                renderBillingWithAutoRenewal={renderBillingWithAutoRenewal}
+              />
+            ))
           )}
         </div>
       )}
 
+      {pagination}
       {latencyVisible ? (
         <LatencyProbeModal
           open={latencyModalNode != null}

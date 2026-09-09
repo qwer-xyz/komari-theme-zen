@@ -153,8 +153,17 @@ export const id = {
   errorLoadNodes: "Gagal memuat node:",
   errorLoadPublicInfo: "Gagal memuat pengaturan publik:",
   errorCheckEnv: "Periksa VITE_API_TARGET di .env.development",
-  liveDataStale: "Pembaruan langsung tertunda. Menampilkan data terakhir yang diterima.",
-  liveDataUnavailable: "Status langsung tidak tersedia. Status node saat ini tidak diketahui.",
+  liveDataStale:
+    "Pembaruan langsung tertunda. Menampilkan data terakhir yang diterima.",
+  liveDataUnavailable:
+    "Status langsung tidak tersedia. Status node saat ini tidak diketahui.",
+  errorSection: "Bagian ini gagal dimuat.",
+  errorHistory: "Riwayat gagal diperbarui.",
+  reloadPage: "Muat ulang halaman",
+  previousPage: "Sebelumnya",
+  nextPage: "Berikutnya",
+  nodePages: "Halaman node",
+  residualNoConversion: "Tidak perlu konversi",
   retry: "Coba lagi",
   statusUnknown: "TIDAK DIKETAHUI",
   clearSearch: "Hapus pencarian",
@@ -180,7 +189,8 @@ export const id = {
   billingRemainingValueShort: "Sisa",
   billingRemainingValueTitle: "Nilai tersisa",
   residualValueTitle: "Nilai Tersisa",
-  residualValueSubtitle: "Diprorata dari kedaluwarsa dan dikonversi ke mata uang utama.",
+  residualValueSubtitle:
+    "Diprorata dari kedaluwarsa dan dikonversi ke mata uang utama.",
   residualTotal: "Total",
   residualIncluded: "Dihitung",
   residualExcluded: "Dikecualikan",
@@ -208,5 +218,6 @@ export const id = {
   mapScrollHint: "Geser kiri/kanan",
   mapExpandHint: "Ketuk untuk buka",
   btnClose: "Tutup",
-  mapRegionTooltip: (code, online, total) => `${code} · ${online}/${total} online`,
+  mapRegionTooltip: (code, online, total) =>
+    `${code} · ${online}/${total} online`,
 } satisfies Messages;
