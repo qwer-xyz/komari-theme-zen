@@ -215,9 +215,14 @@ export function loadMetricValue(
   metric: MetricKey,
   totals: LoadTotals,
 ): number | null {
-  const ratio = (value: unknown, total: unknown) => {
-    const used = measured(value),
-      capacity = measured(total);
+  const ratio = (value: unknown, total: unknown, fallback: unknown) => {
+    const used = measured(value);
+    const recordedCapacity = measured(total);
+    // Some persisted records carry zero totals; node metadata supplies capacity.
+    // Prefer a valid recorded total so historical resizing remains accurate.
+    const capacity = recordedCapacity != null && recordedCapacity > 0
+      ? recordedCapacity
+      : measured(fallback);
     return used != null && capacity != null && capacity > 0
       ? (used / capacity) * 100
       : null;
@@ -226,11 +231,11 @@ export function loadMetricValue(
     case "cpu":
       return measured(rec.cpu);
     case "mem":
-      return ratio(rec.ram, rec.ram_total ?? totals.memTotal);
+      return ratio(rec.ram, rec.ram_total, totals.memTotal);
     case "swap":
-      return ratio(rec.swap, rec.swap_total ?? totals.swapTotal);
+      return ratio(rec.swap, rec.swap_total, totals.swapTotal);
     case "disk":
-      return ratio(rec.disk, rec.disk_total ?? totals.diskTotal);
+      return ratio(rec.disk, rec.disk_total, totals.diskTotal);
     case "netin":
       return measured(rec.net_in);
     case "netout":

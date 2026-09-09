@@ -15,8 +15,9 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 import { Settings, Globe } from "lucide-react";
+import { LanguageMenu } from "@/components/LanguageMenu";
 import { VPSNode } from "../types";
-import { translations, Lang, LANG_MENU_OPTIONS } from "../lib/i18n";
+import { translations, Lang } from "../lib/i18n";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 import { useThemeSettings, type LogoShape } from "@/hooks/useThemeSettings";
 import type { ThemePreference } from "@/hooks/useThemePreference";
@@ -651,30 +652,7 @@ export function ConsoleHeader({
     return (
       <div className={rootClass}>
         <div className="flex items-center gap-2">
-          <label
-            className={`relative inline-flex items-center ${zenTouch.btn} cursor-pointer font-bold ${textPrimary}`}
-          >
-            <span className="sr-only">Language / 语言</span>
-            <select
-              value={lang}
-              onChange={(event) =>
-                setLangPreference(event.target.value as Lang)
-              }
-              className="max-w-[10rem] cursor-pointer appearance-none bg-transparent pr-4 font-bold text-current outline-none"
-            >
-              {LANG_MENU_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label[lang]}
-                </option>
-              ))}
-            </select>
-            <span
-              className={`${zenType.label} pointer-events-none absolute right-0 opacity-70`}
-              aria-hidden
-            >
-              ▾
-            </span>
-          </label>
+          <LanguageMenu lang={lang} onChange={setLangPreference} />
 
           {!compact ? (
             <span
