@@ -146,6 +146,47 @@ test("histories distinguish missing metrics from zero and anchor to source time"
   );
 });
 
+test("history capacity falls back to node metadata without inventing measurements", () => {
+  for (const [metric, usedKey, totalKey, fallbackKey] of [
+    ["mem", "ram", "ram_total", "memTotal"],
+    ["disk", "disk", "disk_total", "diskTotal"],
+    ["swap", "swap", "swap_total", "swapTotal"],
+  ]) {
+    const totals = { [fallbackKey]: 200 };
+    for (const unavailable of [0, null, undefined, -1, NaN, Infinity, "", "0", "bad"]) {
+      const record = { [usedKey]: 50, [totalKey]: unavailable };
+      assert.equal(recordTransform.loadMetricValue(record, metric, totals), 25);
+      assert.equal(recordTransform.loadMetricValue({ ...record, [usedKey]: 0 }, metric, totals), 0);
+      assert.equal(recordTransform.loadMetricValue({ ...record, [usedKey]: null }, metric, totals), null);
+      assert.equal(recordTransform.loadMetricValue({ ...record, [usedKey]: undefined }, metric, totals), null);
+      assert.equal(recordTransform.loadMetricValue(record, metric, { [fallbackKey]: 0 }), null);
+    }
+    assert.equal(recordTransform.loadMetricValue({ [usedKey]: 50, [totalKey]: 100 }, metric, totals), 50);
+    assert.equal(recordTransform.loadMetricValue({ [usedKey]: "50", [totalKey]: "100" }, metric, totals), 50);
+  }
+});
+
+test("persisted zero-total records produce memory and disk charts at every history range", () => {
+  const time = "2026-09-09T06:21:00Z";
+  const record = { time, ram: 147067699, ram_total: 0, disk: 1299932160, disk_total: 0, swap: 0, swap_total: 0 };
+  const totals = { memTotal: 486641664, diskTotal: 10731317760, swapTotal: 0 };
+  for (const hours of [6, 12, 18, 24]) {
+    const history = recordTransform.buildAllMetricHistories(hours, totals, [record], []);
+    assert.equal(history.mem.hasData, true);
+    assert.equal(history.disk.hasData, true);
+    assert.equal(history.mem.values.at(-1), (record.ram / totals.memTotal) * 100);
+    assert.equal(history.disk.values.at(-1), (record.disk / totals.diskTotal) * 100);
+    assert.equal(history.swap.hasData, false);
+    assert.equal(history.mem.timestamps.at(-1), Date.parse(time));
+    assert.deepEqual(history.mem.timestamps, history.disk.timestamps);
+  }
+  const recent = recordTransform.buildAllMetricHistories(6, totals, [], [{
+    updated_at: time, ram: { used: record.ram, total: 0 }, disk: { used: record.disk, total: 0 },
+  }]);
+  assert.equal(recent.mem.hasData, true);
+  assert.equal(recent.disk.hasData, true);
+});
+
 test("recent fallback uses measured timestamps and leaves absent temperature empty", () => {
   const time = "2026-09-09T00:00:00Z";
   const history = recordTransform.buildAllMetricHistories(
