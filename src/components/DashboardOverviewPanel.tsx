@@ -62,7 +62,7 @@ type DashboardOverviewPanelProps = {
 
 function MetricIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
-    <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-lg border border-zen-line bg-zen-elevate/55 text-zen-accent shadow-[inset_0_1px_0_var(--zen-elevate)] @xl:size-10 @7xl:size-12">
+    <span className="inline-flex size-8 sm:size-11 shrink-0 items-center justify-center rounded-lg border border-zen-line bg-zen-elevate/55 text-zen-accent shadow-[inset_0_1px_0_var(--zen-elevate)] @xl:size-10 @7xl:size-12">
       <Icon className="size-5 @7xl:size-[22px]" strokeWidth={1.8} aria-hidden />
     </span>
   );
@@ -148,7 +148,7 @@ function HeroMetric({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-4 px-5 py-5 @xl:min-h-40 @xl:gap-3 @xl:px-4 @xl:py-5 @5xl:min-h-44 @5xl:px-5 @7xl:gap-5 @7xl:px-8 @7xl:py-6">
+    <div className="relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-3 px-4 py-3 sm:gap-4 sm:px-5 sm:py-5 @xl:min-h-36 @xl:gap-3 @xl:px-4 @xl:py-4 @5xl:min-h-40 @5xl:px-5 @7xl:gap-5 @7xl:px-7 @7xl:py-5">
       <MetricIcon icon={metric.icon} />
       <div className="flex min-w-0 flex-col justify-center">
         <span
@@ -159,7 +159,7 @@ function HeroMetric({
         </span>
         <div className="grid min-w-0 grid-cols-[minmax(0,auto)_minmax(4.5rem,7rem)] items-center gap-3 @xl:grid-cols-1 @xl:gap-1.5 @5xl:grid-cols-[minmax(0,auto)_minmax(4.5rem,7rem)] @5xl:gap-3">
           <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-            <span className="text-[2.5rem] font-black leading-none text-zen-fg-strong @xl:text-[2.25rem] @5xl:text-[2.75rem] @7xl:text-[3.5rem]">
+            <span className="text-[2rem] sm:text-[2.5rem] font-black leading-none tabular-nums text-zen-fg-strong @xl:text-[2.25rem] @5xl:text-[2.75rem] @7xl:text-[3rem]">
               {metric.value}
             </span>
             {metric.suffix ? (
@@ -191,10 +191,17 @@ function StatMetric({ metric }: { metric: OverviewStatMetric }) {
   return (
     <div className="grid min-h-[4.5rem] min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-2 px-3 py-3 sm:grid-cols-[2.25rem_minmax(0,1fr)] sm:gap-3 sm:px-5 sm:py-3.5">
       <span className="inline-flex size-7 items-center justify-center rounded-md border border-zen-line bg-zen-elevate/45 text-zen-accent sm:size-9">
-        <Icon className="size-3.5 sm:size-[17px]" strokeWidth={1.8} aria-hidden />
+        <Icon
+          className="size-3.5 sm:size-[17px]"
+          strokeWidth={1.8}
+          aria-hidden
+        />
       </span>
       <div className="min-w-0 font-mono">
-        <span className={`${zenType.label} ${zenText.muted} block leading-tight normal-case`} title={metric.label}>
+        <span
+          className={`${zenType.label} ${zenText.muted} block leading-tight normal-case`}
+          title={metric.label}
+        >
           {metric.label}
         </span>
         <div className="mt-1 min-w-0 break-words text-[0.6875rem] font-bold leading-tight text-zen-fg-strong sm:text-[0.8125rem]">
@@ -218,15 +225,24 @@ function NetworkHealthRail({ health }: { health: OverviewNetworkHealth }) {
       <div className="grid min-w-0 grid-cols-3 gap-x-3 gap-y-3 @xl:grid-cols-[minmax(10rem,1.05fr)_repeat(3,minmax(0,1fr))] @xl:items-center @xl:gap-x-8">
         <div className="col-span-3 flex min-w-0 items-center justify-between gap-3 @xl:col-span-1 @xl:justify-start">
           <div className="flex min-w-0 items-center gap-3">
-            <span className={`inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-zen-fill-muted/25 ${toneClass}`}>
+            <span
+              className={`inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-zen-fill-muted/25 ${toneClass}`}
+            >
               <RadioTower className="size-4" strokeWidth={1.8} aria-hidden />
             </span>
-            <span className={`${zenType.label} ${zenText.muted} truncate font-mono uppercase zen-track-tight`}>
+            <span
+              className={`${zenType.label} ${zenText.muted} truncate font-mono uppercase zen-track-tight`}
+            >
               {health.label}
             </span>
           </div>
-          <span className={`${zenType.caption} ${toneClass} inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap font-mono font-bold`}>
-            <span className="size-1.5 rounded-full bg-current shadow-[0_0_0_3px_color-mix(in_srgb,currentColor_12%,transparent)]" aria-hidden />
+          <span
+            className={`${zenType.caption} ${toneClass} inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap font-mono font-bold`}
+          >
+            <span
+              className="size-1.5 rounded-full bg-current shadow-[0_0_0_3px_color-mix(in_srgb,currentColor_12%,transparent)]"
+              aria-hidden
+            />
             {health.status}
           </span>
         </div>
@@ -241,14 +257,20 @@ function NetworkHealthRail({ health }: { health: OverviewNetworkHealth }) {
                   : "text-left"
             }`}
           >
-            <span className={`${zenType.micro} ${zenText.subtle} block truncate uppercase`} title={metric.label}>
+            <span
+              className={`${zenType.micro} ${zenText.subtle} block truncate uppercase`}
+              title={metric.label}
+            >
               {metric.label}
             </span>
             <span className="mt-1 block whitespace-nowrap text-sm font-extrabold leading-none tabular-nums text-zen-fg-strong @xl:text-base">
               {metric.value}
             </span>
             {metric.detail ? (
-              <span className={`${zenType.micro} ${zenText.faint} mt-1.5 hidden truncate normal-case @xl:block`} title={metric.detail}>
+              <span
+                className={`${zenType.micro} ${zenText.faint} mt-1.5 hidden truncate normal-case @xl:block`}
+                title={metric.detail}
+              >
                 {metric.detail}
               </span>
             ) : null}
@@ -272,7 +294,7 @@ export function DashboardOverviewPanel({
   if (!showHeroes && !showStats) return null;
 
   return (
-    <div className="space-y-4 pt-5 @3xl:pt-7">
+    <div className="space-y-3 pt-1 @3xl:pt-3">
       {showHeroes ? (
         <section className="overflow-hidden rounded-xl border border-zen-line bg-zen-surface/75 shadow-[0_10px_30px_rgba(38,35,28,0.06)] backdrop-blur-sm dark:shadow-[0_14px_34px_rgba(0,0,0,0.18)]">
           <div className="grid grid-cols-1 divide-y divide-zen-line @xl:grid-cols-3 @xl:divide-x @xl:divide-y-0">

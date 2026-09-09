@@ -1,15 +1,11 @@
+import { queryRecords } from "@/lib/recordQueries";
+import { mapWithConcurrency } from "@/lib/requestQueue";
 import { useEffect, useState } from "react";
 import { useRPC2Call } from "@/contexts/RPC2Context";
 import { aggregateLatency } from "@/lib/recordTransform";
 import type { PingRecordsResponse, PingTaskInfo } from "@/types/records";
-import type {
-  PingMetricStat,
-  PingMetricStatsResponse,
-} from "@/types/metrics";
-import {
-  canTryRpcMethod,
-  noteRpcMethodFailure,
-} from "@/lib/rpcCapability";
+import type { PingMetricStat, PingMetricStatsResponse } from "@/types/metrics";
+import { canTryRpcMethod, noteRpcMethodFailure } from "@/lib/rpcCapability";
 
 export type PingSummaryEntry = {
   latency: number;
@@ -36,7 +32,7 @@ type PingSummaryParams = {
 };
 
 function buildPingSummaryParams(uuid: string): PingSummaryParams {
-  const end = new Date();
+  const end = new Date(Math.floor(Date.now() / 20_000) * 20_000);
   const start = new Date(end.getTime() - WINDOW_MS);
   return {
     uuid,
@@ -47,36 +43,16 @@ function buildPingSummaryParams(uuid: string): PingSummaryParams {
   };
 }
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let index = 0;
-
-  async function worker() {
-    while (index < items.length) {
-      const i = index++;
-      results[i] = await fn(items[i]);
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(limit, items.length) }, () =>
-    worker(),
-  );
-  await Promise.all(workers);
-  return results;
-}
-
 async function fetchPingSummaries(
   call: ReturnType<typeof useRPC2Call>["call"],
   nodeUuids: string[],
   taskIds: number[],
+  signal: AbortSignal,
 ): Promise<Map<string, PingSummaryEntry>> {
   if (canTryRpcMethod(METRIC_METHOD)) {
     try {
-      const response = await call<unknown, PingMetricStatsResponse>(
+      const response = await queryRecords<PingMetricStatsResponse>(
+        call,
         METRIC_METHOD,
         {
           entity_ids: nodeUuids,
@@ -84,6 +60,7 @@ async function fetchPingSummaries(
           hours: 1,
           max_points: 120,
         },
+        signal,
       );
       if (Array.isArray(response?.stats)) {
         return buildMetricSummaryMap(nodeUuids, response.stats);
@@ -99,9 +76,11 @@ async function fetchPingSummaries(
     CONCURRENCY,
     async (uuid) => {
       try {
-        const result = await call<PingSummaryParams, PingRecordsResponse>(
+        const result = await queryRecords<PingRecordsResponse>(
+          call,
           "common:getRecords",
           buildPingSummaryParams(uuid),
+          signal,
         );
         const tasks = (result?.tasks ?? []).filter(
           (task) => allowedTasks.size === 0 || allowedTasks.has(task.id),
@@ -111,6 +90,7 @@ async function fetchPingSummaries(
         return null;
       }
     },
+    signal,
   );
 
   const map = new Map<string, PingSummaryEntry>();
@@ -141,7 +121,13 @@ function buildSummaryEntry(tasks: PingTaskInfo[]): PingSummaryEntry {
       (b.loss ?? 0) - (a.loss ?? 0) ||
       (b.latest ?? b.avg ?? 0) - (a.latest ?? a.avg ?? 0),
   )[0];
-  return { latency: aggregateLatency(tasks), tasks, loss, volatility, worstTask };
+  return {
+    latency: aggregateLatency(tasks),
+    tasks,
+    loss,
+    volatility,
+    worstTask,
+  };
 }
 
 function statToTask(stat: PingMetricStat): PingTaskInfo {
@@ -197,6 +183,7 @@ export function usePingSummary(nodeUuids: string[], taskIds: number[] = []) {
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     let timer: number | undefined;
     let running = false;
 
@@ -213,7 +200,12 @@ export function usePingSummary(nodeUuids: string[], taskIds: number[] = []) {
       if (initial) setIsLoading(true);
 
       try {
-        const map = await fetchPingSummaries(call, nodeUuids, taskIds);
+        const map = await fetchPingSummaries(
+          call,
+          nodeUuids,
+          taskIds,
+          controller.signal,
+        );
         if (cancelled) return;
         setSummary((previous) => {
           const next = new Map<string, PingSummaryEntry>();
@@ -246,6 +238,7 @@ export function usePingSummary(nodeUuids: string[], taskIds: number[] = []) {
 
     return () => {
       cancelled = true;
+      controller.abort();
       if (timer) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };

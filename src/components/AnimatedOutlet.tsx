@@ -5,27 +5,14 @@
 
 import { useEffect, useRef } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { useRouteTransition } from "@/hooks/useRouteTransition";
-import { zenMotion } from "@/lib/zenMotion";
 import type { AppOutletContext } from "@/layouts/AppLayout";
 
 type AnimatedOutletProps = {
   context: AppOutletContext;
 };
 
-const variantClass: Record<
-  ReturnType<typeof useRouteTransition>,
-  string
-> = {
-  forward: zenMotion.pageEnterForward,
-  back: zenMotion.pageEnterBack,
-  none: "",
-};
-
 export function AnimatedOutlet({ context }: AnimatedOutletProps) {
   const location = useLocation();
-  const variant = useRouteTransition(location.pathname);
-  const motionClass = variantClass[variant];
   const previousPathRef = useRef(location.pathname);
 
   useEffect(() => {
@@ -38,10 +25,7 @@ export function AnimatedOutlet({ context }: AnimatedOutletProps) {
   }, [location.pathname]);
 
   return (
-    <div
-      key={location.pathname}
-      className={`zen-page-transition-root ${motionClass}`.trim()}
-    >
+    <div key={location.pathname} className="zen-page-transition-root">
       <Outlet context={context} />
     </div>
   );

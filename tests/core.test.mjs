@@ -15,22 +15,266 @@ after(async () => {
 
 const numeric = await vite.ssrLoadModule("/src/lib/numeric.ts");
 const queryCache = await vite.ssrLoadModule("/src/lib/queryCache.ts");
-const recordTransform = await vite.ssrLoadModule(
-  "/src/lib/recordTransform.ts",
-);
+const recordTransform = await vite.ssrLoadModule("/src/lib/recordTransform.ts");
 const rpc2 = await vite.ssrLoadModule("/src/lib/rpc2.ts");
 const colorScheme = await vite.ssrLoadModule(
   "/src/lib/colorScheme/resolveScheme.ts",
 );
 const sanitizeHtml = await vite.ssrLoadModule("/src/lib/sanitizeHtml.ts");
 const dashboardTrend = await vite.ssrLoadModule("/src/lib/dashboardTrend.ts");
+const fontScheme = await vite.ssrLoadModule(
+  "/src/lib/fontScheme/resolveFont.ts",
+);
+const pingSeries = await vite.ssrLoadModule("/src/lib/pingChartSeries.ts");
+const queue = await vite.ssrLoadModule("/src/lib/requestQueue.ts");
+const gpuSampler = await vite.ssrLoadModule("/src/lib/sampleGpuRecords.ts");
+const residual = await vite.ssrLoadModule("/src/lib/residualValue.ts");
+
+test("same-currency value survives an unavailable exchange service", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("offline");
+  };
+  try {
+    const rates = await residual.loadResidualExchangeRates("CNY", ["CNY"]);
+    assert.equal(rates.rates.CNY, 1);
+    assert.equal(rates.source, "Local");
+    const nodes = [
+      {
+        id: "paid",
+        name: "paid",
+        price: 30,
+        billingCycle: 30,
+        currency: "CNY",
+        expiredAt: new Date(Date.now() + 10 * 86400000).toISOString(),
+      },
+      { id: "free", name: "free", price: -1, currency: "CNH" },
+      {
+        id: "foreign",
+        name: "foreign",
+        price: 30,
+        billingCycle: 30,
+        currency: "USD",
+        expiredAt: new Date(Date.now() + 10 * 86400000).toISOString(),
+      },
+    ];
+    const summary = residual.computeResidualValueSummary(nodes, "CNY", {});
+    assert.equal(summary.includedCount, 1);
+    assert(summary.totalValue > 0);
+    assert(summary.excludedNodes.some((node) => node.reason === "free"));
+    assert(
+      summary.excludedNodes.some((node) => node.reason === "missing_rate"),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("GPU gaps stay empty instead of drawing across an outage", () => {
+  const records = [0, 1000, 2000, 3_600_000, 3_601_000].map((offset) => ({
+    time: new Date(1_700_000_000_000 + offset).toISOString(),
+    utilization: 20,
+    mem_used: 10,
+    mem_total: 100,
+  }));
+  const sampled = gpuSampler.sampleGpuRecords(records);
+  assert(
+    sampled.some(
+      (record) => record.utilization === null && record.mem_used === null,
+    ),
+  );
+  assert(sampled.includes(records[2]) && sampled.includes(records[3]));
+});
+
+test("prototype names cannot select a font or color preset", () => {
+  for (const value of ["constructor", "toString", "__proto__", "missing"]) {
+    assert.equal(fontScheme.normalizeFontPresetId(value), "Default");
+    assert.doesNotThrow(() =>
+      colorScheme.resolveColorScheme({ presetId: value, mode: "light" }),
+    );
+    assert.doesNotThrow(() =>
+      fontScheme.resolveFontScheme({
+        presetId: value,
+        customFamily: "",
+        customCssUrl: "",
+      }),
+    );
+  }
+  assert.deepEqual(
+    fontScheme.resolveFontScheme({
+      presetId: "System",
+      customFamily: "",
+      customCssUrl: "",
+    }).cssUrls,
+    [],
+  );
+  assert.deepEqual(
+    fontScheme.resolveFontScheme({
+      presetId: "Custom",
+      customFamily: "Arial",
+      customCssUrl: "",
+    }).cssUrls,
+    [],
+  );
+});
+
+test("histories distinguish missing metrics from zero and anchor to source time", () => {
+  const time = "2026-09-09T00:00:00Z";
+  const totals = { memTotal: 100, swapTotal: 0, diskTotal: 100 };
+  const history = recordTransform.buildAllMetricHistories(
+    1,
+    totals,
+    [{ time, cpu: 0, ram: null }],
+    [],
+  );
+  assert.equal(history.cpu.hasData, true);
+  assert.equal(history.cpu.values.at(-1), 0);
+  assert.equal(history.mem.hasData, false);
+  assert.equal(history.temp.hasData, false);
+  assert(history.temp.values.every((value) => value === null));
+  assert.equal(history.cpu.timestamps.at(-1), Date.parse(time));
+  const later = recordTransform.buildAllMetricHistories(
+    1,
+    totals,
+    [{ time: "2026-09-09T00:30:00Z", cpu: 10 }],
+    [],
+  );
+  assert.equal(later.cpu.values.length, history.cpu.values.length);
+  assert.equal(
+    later.cpu.timestamps.at(-1) - history.cpu.timestamps.at(-1),
+    30 * 60_000,
+  );
+});
+
+test("recent fallback uses measured timestamps and leaves absent temperature empty", () => {
+  const time = "2026-09-09T00:00:00Z";
+  const history = recordTransform.buildAllMetricHistories(
+    1,
+    { memTotal: 100 },
+    [],
+    [{ updated_at: time, cpu: { usage: 3 } }],
+  );
+  assert.equal(history.cpu.values.at(-1), 3);
+  assert.equal(history.cpu.timestamps.at(-1), Date.parse(time));
+  assert.equal(history.temp.hasData, false);
+});
+
+test("one cancelled subscriber cannot abort another; last subscriber releases transport", async () => {
+  queryCache.clearQueryCache();
+  let release, sharedSignal;
+  const loader = (signal) => {
+    sharedSignal = signal;
+    return new Promise((resolve) => {
+      release = resolve;
+    });
+  };
+  const firstController = new AbortController();
+  const secondController = new AbortController();
+  const first = queryCache.cachedQuery(
+    "shared",
+    loader,
+    1000,
+    firstController.signal,
+  );
+  const second = queryCache.cachedQuery(
+    "shared",
+    loader,
+    1000,
+    secondController.signal,
+  );
+  firstController.abort();
+  await assert.rejects(first, (error) => error.name === "AbortError");
+  assert.equal(sharedSignal.aborted, false);
+  release(42);
+  assert.equal(await second, 42);
+  const last = new AbortController();
+  const request = queryCache.cachedQuery("last", loader, 1000, last.signal);
+  last.abort();
+  await assert.rejects(request, (error) => error.name === "AbortError");
+  assert.equal(sharedSignal.aborted, true);
+  release(43);
+});
+
+test("large results return normally without retention", async () => {
+  queryCache.clearQueryCache();
+  let calls = 0;
+  const loader = async () => {
+    calls++;
+    return "x".repeat(3 * 1024 * 1024);
+  };
+  assert.equal(
+    (await queryCache.cachedQuery("large", loader, 1000)).length,
+    3 * 1024 * 1024,
+  );
+  await queryCache.cachedQuery("large", loader, 1000);
+  assert.equal(calls, 2);
+});
+
+test("cancelled batches stop before scheduling remaining nodes", async () => {
+  const controller = new AbortController();
+  const seen = [];
+  await queue.mapWithConcurrency(
+    [1, 2, 3, 4, 5],
+    1,
+    async (value) => {
+      seen.push(value);
+      controller.abort();
+      return value;
+    },
+    controller.signal,
+  );
+  assert.deepEqual(seen, [1]);
+});
+
+test("history scheduler bounds concurrency across separate consumers", async () => {
+  let active = 0,
+    peak = 0;
+  await Promise.all(
+    Array.from({ length: 12 }, () =>
+      queue.scheduleHistory(async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        active--;
+        return true;
+      }, new AbortController().signal),
+    ),
+  );
+  assert.equal(peak, 3);
+});
+
+test("ping lookup honors nearest ties, tolerance and gaps", () => {
+  const points = [
+    { t: 10, v: 1 },
+    { t: 20, v: 2 },
+    { t: 100, v: 3 },
+  ];
+  assert.equal(pingSeries.valueAtTime(points, 15), 1);
+  assert.equal(pingSeries.valueAtTime(points, 90, 5), null);
+  assert.equal(pingSeries.gapContainingTime(points, 30, 50)?.durationMs, 80);
+  assert.equal(pingSeries.gapContainingTime(points, 30, 100), null);
+  assert.equal(pingSeries.valueAtTime([], 10), null);
+});
+
+test("GPU history keeps extrema in 100000 records within the rendering budget", () => {
+  const records = Array.from({ length: 100000 }, (_, i) => ({
+    time: new Date(1_700_000_000_000 + i * 1000).toISOString(),
+    utilization: i === 54321 ? 100 : 10,
+    mem_used: i === 12345 ? 99 : 20,
+    mem_total: 100,
+  }));
+  const sampled = gpuSampler.sampleGpuRecords(records);
+  assert(sampled.length <= 1000);
+  assert(sampled.includes(records[54321]));
+  assert(sampled.includes(records[12345]));
+  assert.strictEqual(sampled[0], records[0]);
+  assert.strictEqual(sampled.at(-1), records.at(-1));
+});
 
 function hexLuminance(hex) {
   const channels = [1, 3, 5].map((start) => {
     const value = Number.parseInt(hex.slice(start, start + 2), 16) / 255;
-    return value <= 0.04045
-      ? value / 12.92
-      : ((value + 0.055) / 1.055) ** 2.4;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   });
   return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
@@ -111,7 +355,10 @@ test("custom themes keep text readable across mixed light and dark surfaces", ()
 test("footer links reject executable URL schemes", () => {
   assert.equal(sanitizeHtml.safeLinkHref("javascript:alert(1)"), null);
   assert.equal(sanitizeHtml.safeLinkHref("data:text/html,x"), null);
-  assert.equal(sanitizeHtml.safeLinkHref("https://example.com/a"), "https://example.com/a");
+  assert.equal(
+    sanitizeHtml.safeLinkHref("https://example.com/a"),
+    "https://example.com/a",
+  );
   assert.equal(sanitizeHtml.safeLinkHref("/status"), "/status");
 });
 
@@ -276,12 +523,7 @@ test("single-pass metric histories match the established per-metric output", () 
     "processes",
     "temp",
   ];
-  const all = recordTransform.buildAllMetricHistories(
-    1,
-    totals,
-    records,
-    [],
-  );
+  const all = recordTransform.buildAllMetricHistories(1, totals, records, []);
 
   for (const metric of metrics) {
     assert.deepEqual(
@@ -369,7 +611,7 @@ test("RPC WebSocket abort removes the pending request", async () => {
   }
 });
 
-test("RPC WebSocket-to-HTTP fallback shares one timeout budget", async () => {
+test("RPC WebSocket-to-HTTP fallback recovers a silent socket within one timeout budget", async () => {
   const originalFetch = globalThis.fetch;
   const OriginalWebSocket = globalThis.WebSocket;
   let fetchCalls = 0;
@@ -377,21 +619,32 @@ test("RPC WebSocket-to-HTTP fallback shares one timeout budget", async () => {
     static OPEN = 1;
     readyState = 1;
     send() {}
+    close() {
+      this.readyState = 3;
+    }
   }
   globalThis.WebSocket = FakeWebSocket;
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (_url, options) => {
     fetchCalls += 1;
-    return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: true }));
+    return new Response(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: JSON.parse(options.body).id,
+        result: true,
+      }),
+    );
   };
   try {
-    const client = new rpc2.RPC2Client("/api/rpc2", { autoConnect: false });
+    const client = new rpc2.RPC2Client("/api/rpc2", {
+      autoConnect: false,
+      autoReconnect: false,
+    });
     client.connectionState = "connected";
     client.ws = new FakeWebSocket();
-    await assert.rejects(
-      client.call("slow", undefined, { timeout: 15 }),
-      (error) => error instanceof rpc2.RPC2TransportError,
-    );
-    assert.equal(fetchCalls, 0);
+    assert.equal(await client.call("slow", undefined, { timeout: 100 }), true);
+    assert.equal(fetchCalls, 1);
+    assert.equal(client.pendingRequests.size, 0);
+    assert.equal(client.ws, null);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.WebSocket = OriginalWebSocket;

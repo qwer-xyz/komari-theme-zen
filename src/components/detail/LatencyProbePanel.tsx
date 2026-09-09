@@ -1,3 +1,4 @@
+import { HistoryError } from "@/components/SectionErrorBoundary";
 import React from "react";
 import { usePingRecords } from "@/hooks/usePingRecords";
 import { useTimeChartScrub } from "@/hooks/useChartScrub";
@@ -22,7 +23,11 @@ import { taskColor, taskPingVolatility } from "@/lib/recordTransform";
 import { zenType, zenTouch } from "@/lib/typography";
 import { zenFill, zenPopover, zenText } from "@/lib/zenSemantics";
 import { PingChartOverview } from "@/components/detail/PingChartOverview";
-import type { PingTaskInfo } from "@/types/records";
+import type { PingRecord, PingTaskInfo } from "@/types/records";
+
+const EMPTY_TASKS: PingTaskInfo[] = [];
+const EMPTY_RECORDS: PingRecord[] = [];
+const EMPTY_IDS: number[] = [];
 
 type ProbeChartPoint = { x: number; y: number; val: number };
 
@@ -53,7 +58,11 @@ function valueToY(
   paddingY: number,
   chartHeight: number,
 ): number {
-  return height - paddingY - (Math.max(0, Math.min(maxVal, val)) / maxVal) * chartHeight;
+  return (
+    height -
+    paddingY -
+    (Math.max(0, Math.min(maxVal, val)) / maxVal) * chartHeight
+  );
 }
 
 function GapEndpoint({
@@ -99,34 +108,43 @@ export function LatencyProbePanel({
   onToggleProbe,
   lang,
   theme,
-  taskIds = [],
+  taskIds = EMPTY_IDS,
 }: LatencyProbePanelProps) {
   const t = translations[lang];
   const [peakClipping, setPeakClipping] = React.useState(false);
   const [connectBreakpoints, setConnectBreakpoints] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = React.useState(1000);
+  const [containerWidth, setContainerWidth] = React.useState(320);
+  const [container, setContainer] = React.useState<HTMLDivElement | null>(null);
+  const bindContainer = React.useCallback((element: HTMLDivElement | null) => {
+    containerRef.current = element;
+    setContainer(element);
+  }, []);
 
-  const { data, isLoading } = usePingRecords(uuid, hours, taskIds);
+  const { data, isLoading, error, retry } = usePingRecords(
+    uuid,
+    hours,
+    taskIds,
+  );
 
   React.useEffect(() => {
     onLoadingChange?.(isLoading);
   }, [isLoading, onLoadingChange]);
 
   React.useEffect(() => {
-    const el = containerRef.current;
+    const el = container;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
-      if (w && w > 0) setContainerWidth(w);
+      if (w && w > 0) setContainerWidth(Math.round(w));
     });
     ro.observe(el);
     setContainerWidth(el.getBoundingClientRect().width || 1000);
     return () => ro.disconnect();
-  }, []);
+  }, [container]);
 
-  const tasks: PingTaskInfo[] = data?.tasks ?? [];
-  const records = data?.records ?? [];
+  const tasks: PingTaskInfo[] = data?.tasks ?? EMPTY_TASKS;
+  const records = data?.records ?? EMPTY_RECORDS;
 
   const { fullRange, viewRange, setViewRange, resetZoom, isZoomed } =
     usePingChartViewport(records, `${uuid}:${hours}`);
@@ -136,13 +154,38 @@ export function LatencyProbePanel({
     [records, tasks],
   );
 
-  const activeProbeIds =
-    selectedProbes.length > 0
-      ? selectedProbes
-      : tasks.map((task) => String(task.id));
-
-  const activeProbesList = tasks.filter((task) =>
-    activeProbeIds.includes(String(task.id)),
+  const activeProbeIds = React.useMemo(
+    () =>
+      selectedProbes.length > 0
+        ? selectedProbes
+        : tasks.map((task) => String(task.id)),
+    [selectedProbes, tasks],
+  );
+  const activeProbesList = React.useMemo(
+    () => tasks.filter((task) => activeProbeIds.includes(String(task.id))),
+    [tasks, activeProbeIds],
+  );
+  const colors = React.useMemo(
+    () =>
+      Object.fromEntries(
+        tasks.map((task, index) => [String(task.id), taskColor(index)]),
+      ),
+    [tasks],
+  );
+  const visibleRaw = React.useMemo(
+    () =>
+      Object.fromEntries(
+        tasks.map((task) => [
+          String(task.id),
+          viewRange
+            ? filterPointsToRange(
+                rawSeriesByTask[String(task.id)] ?? [],
+                viewRange,
+              )
+            : [],
+        ]),
+      ),
+    [tasks, rawSeriesByTask, viewRange],
   );
 
   const maxPoints = Math.max(60, Math.floor(containerWidth * 2));
@@ -166,18 +209,25 @@ export function LatencyProbePanel({
       );
     }
     return map;
-  }, [tasks, rawSeriesByTask, viewRange, peakClipping, maxPoints, connectBreakpoints]);
+  }, [
+    tasks,
+    rawSeriesByTask,
+    viewRange,
+    peakClipping,
+    maxPoints,
+    connectBreakpoints,
+  ]);
 
   const gapBreakByTask = React.useMemo(() => {
     if (!viewRange) return {} as Record<string, number>;
     const map: Record<string, number> = {};
     for (const task of tasks) {
       const id = String(task.id);
-      const points = filterPointsToRange(rawSeriesByTask[id] ?? [], viewRange);
+      const points = visibleRaw[id] ?? [];
       map[id] = gapBreakMsForSeries(points, task);
     }
     return map;
-  }, [tasks, rawSeriesByTask, viewRange]);
+  }, [tasks, visibleRaw, viewRange]);
 
   const maxLatencyVal = React.useMemo(() => {
     let max = 50;
@@ -212,6 +262,16 @@ export function LatencyProbePanel({
     return map;
   }, [tasks, records]);
 
+  const volatilityByTask = React.useMemo(
+    () =>
+      Object.fromEntries(
+        tasks.map((task) => [
+          String(task.id),
+          taskPingVolatility(task, rawValuesByTask[String(task.id)]),
+        ]),
+      ),
+    [tasks, rawValuesByTask],
+  );
   const width = 1000;
   const height = 240;
   const paddingX = 24;
@@ -220,10 +280,7 @@ export function LatencyProbePanel({
   const chartHeight = height - paddingY * 2;
 
   const scrubConfig = React.useMemo(
-    () =>
-      viewRange
-        ? { width, paddingX, chartWidth, viewRange }
-        : null,
+    () => (viewRange ? { width, paddingX, chartWidth, viewRange } : null),
     [chartWidth, viewRange],
   );
 
@@ -236,9 +293,7 @@ export function LatencyProbePanel({
     onTouchEnd,
   } = useTimeChartScrub(containerRef, scrubConfig);
 
-  const activeTime =
-    hoveredTime ??
-    (viewRange ? viewRange[1] : null);
+  const activeTime = hoveredTime ?? (viewRange ? viewRange[1] : null);
 
   const activeX =
     activeTime != null && viewRange
@@ -260,7 +315,7 @@ export function LatencyProbePanel({
     let widestGap: { durationMs: number } | null = null;
     for (const task of activeProbesList) {
       const id = String(task.id);
-      const raw = filterPointsToRange(rawSeriesByTask[id] ?? [], viewRange);
+      const raw = visibleRaw[id] ?? [];
       const gapBreak = gapBreakByTask[id] ?? gapBreakMsForSeries(raw, task);
       const gap = gapContainingTime(raw, gapBreak, activeTime);
       if (gap && (!widestGap || gap.durationMs > widestGap.durationMs)) {
@@ -278,23 +333,37 @@ export function LatencyProbePanel({
     const rows = activeProbesList
       .map((task, idx) => {
         const id = String(task.id);
-        const raw = filterPointsToRange(rawSeriesByTask[id] ?? [], viewRange);
+        const raw = visibleRaw[id] ?? [];
         const gapBreak = gapBreakByTask[id] ?? gapBreakMsForSeries(raw, task);
         if (gapContainingTime(raw, gapBreak, activeTime)) return null;
         const val = valueAtTime(raw, activeTime, gapBreak / 4);
         if (val == null || !Number.isFinite(val)) return null;
-        return { task, id, val, color: taskColor(idx) };
+        return { task, id, val, color: colors[id] };
       })
       .filter((row): row is NonNullable<typeof row> => row != null)
       .sort((a, b) => a.val - b.val);
 
     return { probeSnapshot: rows, gapHint };
-  }, [activeProbesList, rawSeriesByTask, activeTime, viewRange, gapBreakByTask, t]);
+  }, [
+    activeProbesList,
+    visibleRaw,
+    activeTime,
+    viewRange,
+    gapBreakByTask,
+    t,
+    colors,
+  ]);
 
   const focusY = React.useMemo(() => {
     let y = height - paddingY;
     for (const row of probeSnapshot) {
-      const pointY = valueToY(row.val, maxLatencyVal, height, paddingY, chartHeight);
+      const pointY = valueToY(
+        row.val,
+        maxLatencyVal,
+        height,
+        paddingY,
+        chartHeight,
+      );
       y = Math.min(y, pointY);
     }
     return y;
@@ -322,7 +391,134 @@ export function LatencyProbePanel({
     }));
   }, [viewRange, hours]);
 
+  const curves = React.useMemo(
+    () =>
+      viewRange
+        ? activeProbesList.map((task, idx) => {
+            const id = String(task.id);
+            const plan = chartPlanByTask[id];
+            if (!plan) return null;
+            const { solidSegments, bridgeSegments } = plan;
+            const color = colors[id];
+            const selected = selectedProbes.includes(id);
+            const dimmed = selectedProbes.length > 0 && !selected;
+            const opacity = dimmed
+              ? 0.38
+              : selectedProbes.length === 0
+                ? 0.85
+                : 1;
+
+            const toChartPoints = (segment: PingPoint[]) =>
+              segment.map((p) => ({
+                x: timeToX(p.t, viewRange, paddingX, chartWidth),
+                y: valueToY(p.v, maxLatencyVal, height, paddingY, chartHeight),
+                val: p.v,
+              }));
+
+            return (
+              <g key={id}>
+                {solidSegments.map((segment, segIdx) => {
+                  const points = toChartPoints(segment);
+                  const showGapCap = !connectBreakpoints;
+
+                  if (points.length === 1) {
+                    const capNeeded =
+                      showGapCap &&
+                      (segIdx > 0 || segIdx < solidSegments.length - 1);
+                    return (
+                      <React.Fragment key={`${id}-solid-${segIdx}`}>
+                        {capNeeded ? (
+                          <GapEndpoint
+                            x={points[0].x}
+                            y={points[0].y}
+                            color={color}
+                            opacity={opacity}
+                          />
+                        ) : null}
+                        <circle
+                          cx={points[0].x}
+                          cy={points[0].y}
+                          r={2.2}
+                          fill={color}
+                          opacity={opacity}
+                        />
+                      </React.Fragment>
+                    );
+                  }
+
+                  const pathD = buildProbeLinePath(points);
+                  if (!pathD) return null;
+                  const lastPt = points[points.length - 1];
+                  const firstPt = points[0];
+                  return (
+                    <React.Fragment key={`${id}-solid-${segIdx}`}>
+                      {showGapCap && segIdx > 0 ? (
+                        <GapEndpoint
+                          x={firstPt.x}
+                          y={firstPt.y}
+                          color={color}
+                          opacity={opacity}
+                        />
+                      ) : null}
+                      <path
+                        d={pathD}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth={1.8}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        opacity={opacity}
+                        className="transition-all duration-300"
+                      />
+                      {showGapCap && segIdx < solidSegments.length - 1 ? (
+                        <GapEndpoint
+                          x={lastPt.x}
+                          y={lastPt.y}
+                          color={color}
+                          opacity={opacity}
+                        />
+                      ) : null}
+                    </React.Fragment>
+                  );
+                })}
+
+                {connectBreakpoints &&
+                  bridgeSegments.map((bridge, bridgeIdx) => {
+                    const points = toChartPoints(bridge);
+                    const pathD = buildProbeLinePath(points);
+                    if (!pathD) return null;
+                    return (
+                      <path
+                        key={`${id}-bridge-${bridgeIdx}`}
+                        d={pathD}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth={1.4}
+                        strokeLinecap="round"
+                        strokeDasharray="5 4"
+                        opacity={opacity * 0.72}
+                        className="transition-all duration-300"
+                      />
+                    );
+                  })}
+              </g>
+            );
+          })
+        : null,
+    [
+      activeProbesList,
+      chartPlanByTask,
+      colors,
+      selectedProbes,
+      viewRange,
+      maxLatencyVal,
+      connectBreakpoints,
+    ],
+  );
   const canRenderChart = fullRange != null && viewRange != null;
+
+  if (error && tasks.length === 0)
+    return <HistoryError lang={lang} retry={retry} loading={isLoading} />;
 
   if (tasks.length === 0 && !isLoading) {
     return (
@@ -336,6 +532,7 @@ export function LatencyProbePanel({
 
   return (
     <div className="space-y-4">
+      {error && <HistoryError lang={lang} retry={retry} loading={isLoading} />}
       <div className="relative py-4 px-4 -mx-4 flex flex-col space-y-4 bg-transparent overflow-visible">
         <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-2 select-none w-full">
           <span
@@ -386,7 +583,9 @@ export function LatencyProbePanel({
               <span>{t.pingConnectBreakpoints}</span>
             </button>
             <span className={zenText.subtle}>
-              {formatMsg(t.pingActiveProbes, { count: activeProbesList.length })}
+              {formatMsg(t.pingActiveProbes, {
+                count: activeProbesList.length,
+              })}
             </span>
           </div>
         </div>
@@ -394,7 +593,7 @@ export function LatencyProbePanel({
         {canRenderChart ? (
           <>
             <div
-              ref={containerRef}
+              ref={bindContainer}
               onMouseMove={isLoading ? undefined : onMouseMove}
               onMouseLeave={isLoading ? undefined : onMouseLeave}
               onTouchStart={isLoading ? undefined : onTouchStart}
@@ -421,113 +620,7 @@ export function LatencyProbePanel({
                   />
                 ))}
 
-                {activeProbesList.map((task, idx) => {
-                  const id = String(task.id);
-                  const plan = chartPlanByTask[id];
-                  if (!plan) return null;
-                  const { solidSegments, bridgeSegments } = plan;
-                  const color = taskColor(idx);
-                  const selected = selectedProbes.includes(id);
-                  const dimmed = selectedProbes.length > 0 && !selected;
-                  const opacity =
-                    dimmed ? 0.38 : selectedProbes.length === 0 ? 0.85 : 1;
-
-                  const toChartPoints = (segment: PingPoint[]) =>
-                    segment.map((p) => ({
-                      x: timeToX(p.t, viewRange, paddingX, chartWidth),
-                      y: valueToY(p.v, maxLatencyVal, height, paddingY, chartHeight),
-                      val: p.v,
-                    }));
-
-                  return (
-                    <g key={id}>
-                      {solidSegments.map((segment, segIdx) => {
-                        const points = toChartPoints(segment);
-                        const showGapCap = !connectBreakpoints;
-
-                        if (points.length === 1) {
-                          const capNeeded =
-                            showGapCap &&
-                            (segIdx > 0 || segIdx < solidSegments.length - 1);
-                          return (
-                            <React.Fragment key={`${id}-solid-${segIdx}`}>
-                              {capNeeded ? (
-                                <GapEndpoint
-                                  x={points[0].x}
-                                  y={points[0].y}
-                                  color={color}
-                                  opacity={opacity}
-                                />
-                              ) : null}
-                              <circle
-                                cx={points[0].x}
-                                cy={points[0].y}
-                                r={2.2}
-                                fill={color}
-                                opacity={opacity}
-                              />
-                            </React.Fragment>
-                          );
-                        }
-
-                        const pathD = buildProbeLinePath(points);
-                        if (!pathD) return null;
-                        const lastPt = points[points.length - 1];
-                        const firstPt = points[0];
-                        return (
-                          <React.Fragment key={`${id}-solid-${segIdx}`}>
-                            {showGapCap && segIdx > 0 ? (
-                              <GapEndpoint
-                                x={firstPt.x}
-                                y={firstPt.y}
-                                color={color}
-                                opacity={opacity}
-                              />
-                            ) : null}
-                            <path
-                              d={pathD}
-                              fill="none"
-                              stroke={color}
-                              strokeWidth={1.8}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              opacity={opacity}
-                              className="transition-all duration-300"
-                            />
-                            {showGapCap && segIdx < solidSegments.length - 1 ? (
-                              <GapEndpoint
-                                x={lastPt.x}
-                                y={lastPt.y}
-                                color={color}
-                                opacity={opacity}
-                              />
-                            ) : null}
-                          </React.Fragment>
-                        );
-                      })}
-
-                      {connectBreakpoints &&
-                        bridgeSegments.map((bridge, bridgeIdx) => {
-                          const points = toChartPoints(bridge);
-                          const pathD = buildProbeLinePath(points);
-                          if (!pathD) return null;
-                          return (
-                            <path
-                              key={`${id}-bridge-${bridgeIdx}`}
-                              d={pathD}
-                              fill="none"
-                              stroke={color}
-                              strokeWidth={1.4}
-                              strokeLinecap="round"
-                              strokeDasharray="5 4"
-                              opacity={opacity * 0.72}
-                              className="transition-all duration-300"
-                            />
-                          );
-                        })}
-                    </g>
-                  );
-                })}
+                {curves}
 
                 {isHovering && (
                   <line
@@ -547,7 +640,13 @@ export function LatencyProbePanel({
 
                 {isHovering &&
                   probeSnapshot.map(({ id, val, color }) => {
-                    const y = valueToY(val, maxLatencyVal, height, paddingY, chartHeight);
+                    const y = valueToY(
+                      val,
+                      maxLatencyVal,
+                      height,
+                      paddingY,
+                      chartHeight,
+                    );
                     return (
                       <circle
                         key={`focus-${id}`}
@@ -587,7 +686,10 @@ export function LatencyProbePanel({
                   ) : null}
                   <div className="flex flex-col gap-1">
                     {probeSnapshot.map(({ task, id, val, color }) => (
-                      <div key={id} className="flex items-center gap-1.5 min-w-0">
+                      <div
+                        key={id}
+                        className="flex items-center gap-1.5 min-w-0"
+                      >
                         <span
                           className="h-1.5 w-1.5 shrink-0 rounded-full"
                           style={{ backgroundColor: color }}
@@ -655,16 +757,13 @@ export function LatencyProbePanel({
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 sm:gap-x-6 gap-y-2.5 pt-1.5 font-mono">
                 {tasks.map((task, idx) => {
                   const id = String(task.id);
-                  const color = taskColor(idx);
+                  const color = colors[id];
                   const isSelected = selectedProbes.includes(id);
                   const isChartActive =
                     selectedProbes.length === 0 || isSelected;
                   const avg = task.avg ?? task.latest ?? 0;
                   const lossVal = task.loss ?? 0;
-                  const volatility = taskPingVolatility(
-                    task,
-                    rawValuesByTask[id],
-                  );
+                  const volatility = volatilityByTask[id];
 
                   const metricsTitle = `${avg >= 100 ? avg.toFixed(0) : avg.toFixed(1)}ms · ${lossVal.toFixed(1)}%${
                     volatility !== null ? ` · ${volatility.toFixed(2)}` : ""
@@ -687,7 +786,9 @@ export function LatencyProbePanel({
                     >
                       <span
                         className={`rounded-full shrink-0 transition-all duration-200 ${
-                          isSelected ? "w-1.5 h-1.5 ring-2 ring-zen-accent/40" : "w-1 h-1"
+                          isSelected
+                            ? "w-1.5 h-1.5 ring-2 ring-zen-accent/40"
+                            : "w-1 h-1"
                         }`}
                         style={{ backgroundColor: color }}
                       />
@@ -700,7 +801,11 @@ export function LatencyProbePanel({
                       </span>
                       <span
                         className={`min-w-0 flex-1 truncate text-right font-mono tabular-nums ${
-                          isSelected ? "font-extrabold" : isChartActive ? "font-bold" : ""
+                          isSelected
+                            ? "font-extrabold"
+                            : isChartActive
+                              ? "font-bold"
+                              : ""
                         }`}
                       >
                         <span>
@@ -715,7 +820,9 @@ export function LatencyProbePanel({
                         {volatility !== null ? (
                           <span
                             className={
-                              volatility > 0.3 ? "text-zen-warning" : zenText.subtle
+                              volatility > 0.3
+                                ? "text-zen-warning"
+                                : zenText.subtle
                             }
                             title={t.pingVolatility}
                           >

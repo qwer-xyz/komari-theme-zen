@@ -1,6 +1,13 @@
 import type { FontPreset, FontPresetId } from "./tokens";
 
 export const FONT_PRESETS: Record<FontPresetId, FontPreset> = {
+  System: {
+    id: "System",
+    sans: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    mono: 'ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace',
+    cssUrls: [],
+    preconnect: [],
+  },
   Default: {
     id: "Default",
     sans: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',

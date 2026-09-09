@@ -1,5 +1,6 @@
 export type FontPresetId =
   | "Default"
+  | "System"
   | "MapleMonoCN"
   | "Yomeng"
   | "LXGWWenKai"

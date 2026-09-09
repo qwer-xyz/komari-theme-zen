@@ -2,7 +2,7 @@
   "name": "Komari Zen",
   "short": "Zen",
   "description": "基于极简主义设计理念的 Komari 主题。",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "author": "qwer-xyz",
   "url": "https://github.com/qwer-xyz/komari-theme-zen",
   "preview": "preview.png",
@@ -488,7 +488,7 @@
           "en": "Font preset",
           "zh-CN": "字体方案"
         },
-        "options": "默认,等宽,游梦,霞鹜文楷,文源圆体,自定义",
+        "options": "默认,系统字体,等宽,游梦,霞鹜文楷,文源圆体,自定义",
         "default": "默认",
         "help": {
           "en": "Site-wide font.",

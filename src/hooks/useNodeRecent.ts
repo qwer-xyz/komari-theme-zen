@@ -20,6 +20,7 @@ export function useNodeRecent(
     }
 
     let stopped = false;
+    const controller = new AbortController();
     let timer: number | undefined;
     let running = false;
     setRecords([]);
@@ -34,7 +35,7 @@ export function useNodeRecent(
       running = true;
       if (initial) setIsLoading(true);
       try {
-        const nextRecords = await fetchRecentRecords(uuid);
+        const nextRecords = await fetchRecentRecords(uuid, controller.signal);
         if (!stopped) {
           setRecords(nextRecords);
           setError(null);
@@ -61,6 +62,7 @@ export function useNodeRecent(
 
     return () => {
       stopped = true;
+      controller.abort();
       if (timer) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };

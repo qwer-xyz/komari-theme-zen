@@ -154,7 +154,15 @@ export const en = {
   errorLoadPublicInfo: "Failed to load public settings:",
   errorCheckEnv: "Check VITE_API_TARGET in .env.development",
   liveDataStale: "Live updates are delayed. Showing the last received data.",
-  liveDataUnavailable: "Live status is unavailable. Node states are currently unknown.",
+  liveDataUnavailable:
+    "Live status is unavailable. Node states are currently unknown.",
+  errorSection: "Unable to load this section.",
+  errorHistory: "History could not be refreshed.",
+  reloadPage: "Reload page",
+  previousPage: "Previous",
+  nextPage: "Next",
+  nodePages: "Node pages",
+  residualNoConversion: "No conversion needed",
   retry: "Retry",
   statusUnknown: "UNKNOWN",
   clearSearch: "Clear search",
@@ -180,7 +188,8 @@ export const en = {
   billingRemainingValueShort: "RV",
   billingRemainingValueTitle: "Residual value",
   residualValueTitle: "Residual Value",
-  residualValueSubtitle: "Prorated by expiry and converted to the primary currency.",
+  residualValueSubtitle:
+    "Prorated by expiry and converted to the primary currency.",
   residualTotal: "Total",
   residualIncluded: "Included",
   residualExcluded: "Excluded",
@@ -208,5 +217,6 @@ export const en = {
   mapScrollHint: "Swipe horizontally",
   mapExpandHint: "Tap to expand",
   btnClose: "Close",
-  mapRegionTooltip: (code, online, total) => `${code} · ${online}/${total} online`,
+  mapRegionTooltip: (code, online, total) =>
+    `${code} · ${online}/${total} online`,
 } satisfies Messages;

@@ -10,10 +10,7 @@ import { hoursToChartLength } from "@/lib/timeRangePresets";
 import type { VPSNode } from "@/types";
 import { bytesToGb } from "@/lib/komariMapper";
 import { timestampMs } from "@/lib/numeric";
-import {
-  LATENCY_HISTORY_LEN,
-  type LatencySample,
-} from "@/lib/latencyDisplay";
+import { LATENCY_HISTORY_LEN, type LatencySample } from "@/lib/latencyDisplay";
 
 /** Distinct probe line colors — follow active chart tokens so presets stay coherent. */
 const PING_COLOR_VARS = [
@@ -40,6 +37,7 @@ export type LoadTotals = {
 export type MetricHistoryResult = {
   values: (number | null)[];
   hasData: boolean;
+  timestamps: number[];
 };
 
 /** Map raw load average to 0–100 chart space by logical core count. */
@@ -84,7 +82,10 @@ export function resolveTrafficLimitGb(node: NodeBasicInfo): number {
   return bytesToGb(node.traffic_limit);
 }
 
-export function downsampleSeries(values: number[], targetLen: number): number[] {
+export function downsampleSeries(
+  values: number[],
+  targetLen: number,
+): number[] {
   if (targetLen <= 0) return [];
   if (values.length === 0) return Array(targetLen).fill(0);
   if (values.length === targetLen) return values;
@@ -130,7 +131,11 @@ export function hampelDespike(
     const x = series[i];
     if (x == null || !Number.isFinite(x)) continue;
     const win: number[] = [];
-    for (let j = Math.max(0, i - radius); j <= Math.min(n - 1, i + radius); j++) {
+    for (
+      let j = Math.max(0, i - radius);
+      j <= Math.min(n - 1, i + radius);
+      j++
+    ) {
       const v = series[j];
       if (v != null && Number.isFinite(v)) win.push(v);
     }
@@ -149,7 +154,10 @@ export function hampelDespike(
 }
 
 /** Bucket-mean downsample: averages each bucket, anti-aliasing dense data. */
-export function downsampleSeriesAvg(values: number[], targetLen: number): number[] {
+export function downsampleSeriesAvg(
+  values: number[],
+  targetLen: number,
+): number[] {
   if (targetLen <= 0) return [];
   if (values.length === 0) return Array(targetLen).fill(0);
   if (values.length <= targetLen) return downsampleSeries(values, targetLen);
@@ -182,7 +190,11 @@ export function smoothSeriesTriangular(values: number[], radius = 2): number[] {
   for (let i = 0; i < n; i++) {
     let sum = 0;
     let weight = 0;
-    for (let j = Math.max(0, i - radius); j <= Math.min(n - 1, i + radius); j++) {
+    for (
+      let j = Math.max(0, i - radius);
+      j <= Math.min(n - 1, i + radius);
+      j++
+    ) {
       const w = radius + 1 - Math.abs(i - j);
       sum += values[j] * w;
       weight += w;
@@ -192,43 +204,47 @@ export function smoothSeriesTriangular(values: number[], radius = 2): number[] {
   return out;
 }
 
+function measured(value: unknown): number | null {
+  if (value == null || value === "" || typeof value === "boolean") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 export function loadMetricValue(
   rec: LoadRecord,
   metric: MetricKey,
   totals: LoadTotals,
-): number {
+): number | null {
+  const ratio = (value: unknown, total: unknown) => {
+    const used = measured(value),
+      capacity = measured(total);
+    return used != null && capacity != null && capacity > 0
+      ? (used / capacity) * 100
+      : null;
+  };
   switch (metric) {
     case "cpu":
-      return rec.cpu ?? 0;
-    case "mem": {
-      const total = rec.ram_total ?? totals.memTotal;
-      if (!total) return 0;
-      return ((rec.ram ?? 0) / total) * 100;
-    }
-    case "swap": {
-      const total = rec.swap_total ?? totals.swapTotal;
-      if (!total) return 0;
-      return ((rec.swap ?? 0) / total) * 100;
-    }
-    case "disk": {
-      const total = rec.disk_total ?? totals.diskTotal;
-      if (!total) return 0;
-      return ((rec.disk ?? 0) / total) * 100;
-    }
+      return measured(rec.cpu);
+    case "mem":
+      return ratio(rec.ram, rec.ram_total ?? totals.memTotal);
+    case "swap":
+      return ratio(rec.swap, rec.swap_total ?? totals.swapTotal);
+    case "disk":
+      return ratio(rec.disk, rec.disk_total ?? totals.diskTotal);
     case "netin":
-      return rec.net_in ?? 0;
+      return measured(rec.net_in);
     case "netout":
-      return rec.net_out ?? 0;
+      return measured(rec.net_out);
     case "tcp":
-      return rec.connections ?? 0;
+      return measured(rec.connections);
     case "udp":
-      return rec.connections_udp ?? 0;
+      return measured(rec.connections_udp);
     case "processes":
-      return rec.process ?? 0;
+      return measured(rec.process);
     case "load1":
-      return rec.load ?? 0;
+      return measured(rec.load);
     case "temp":
-      return rec.temp ?? 0;
+      return measured(rec.temp);
   }
 }
 
@@ -245,9 +261,7 @@ export function alignLoadRecordsToChart(
 
   const sorted = records
     .filter((record) => timestampMs(record.time) !== null)
-    .sort(
-      (a, b) => (timestampMs(a.time) ?? 0) - (timestampMs(b.time) ?? 0),
-    );
+    .sort((a, b) => (timestampMs(a.time) ?? 0) - (timestampMs(b.time) ?? 0));
   if (sorted.length === 0) return Array(targetLen).fill(null);
 
   const lastMs = timestampMs(sorted[sorted.length - 1].time)!;
@@ -266,7 +280,8 @@ export function alignLoadRecordsToChart(
       targetLen - 1,
       Math.max(0, Math.floor((ts - startMs) / slotMs)),
     );
-    buckets[idx].push(loadMetricValue(rec, metric, totals));
+    const value = loadMetricValue(rec, metric, totals);
+    if (value != null) buckets[idx].push(value);
   }
 
   return buckets.map((bucket) => {
@@ -342,39 +357,9 @@ export function buildMetricHistory(
   loadRecords: LoadRecord[],
   recentRecords: LiveRecord[],
 ): MetricHistoryResult {
-  const targetLen = hoursToChartLength(hours);
-  const rangeHours = hours;
-
-  if (loadRecords.length > 0) {
-    const values = alignLoadRecordsToChart(
-      loadRecords,
-      metric,
-      totals,
-      rangeHours,
-      targetLen,
-    );
-    const hasData = values.some((v) => v > 0);
-    return { values, hasData: hasData || loadRecords.length > 0 };
-  }
-
-  if (
-    hours <= 24 &&
-    recentRecords.length > 0 &&
-    (metric === "cpu" ||
-      metric === "mem" ||
-      metric === "netin" ||
-      metric === "netout" ||
-      metric === "load1")
-  ) {
-    const series = recentToSparkline(recentRecords, metric, totals);
-    const values = padSeriesLeft(
-      downsampleSeries(series, Math.min(series.length, targetLen)),
-      targetLen,
-    );
-    return { values, hasData: series.length > 0 };
-  }
-
-  return { values: Array(targetLen).fill(0), hasData: false };
+  return buildAllMetricHistories(hours, totals, loadRecords, recentRecords)[
+    metric
+  ];
 }
 
 const ALL_METRIC_KEYS: readonly MetricKey[] = [
@@ -400,7 +385,8 @@ export function buildAllMetricHistories(
 ): Record<MetricKey, MetricHistoryResult> {
   const targetLen = hoursToChartLength(hours);
   const emptyResult = () => ({
-    values: Array<number | null>(targetLen).fill(0),
+    values: Array<number | null>(targetLen).fill(null),
+    timestamps: [],
     hasData: false,
   });
   const results = Object.fromEntries(
@@ -434,7 +420,7 @@ export function buildAllMetricHistories(
       );
       for (const metric of ALL_METRIC_KEYS) {
         const value = loadMetricValue(record, metric, totals);
-        if (!Number.isFinite(value)) continue;
+        if (value == null || !Number.isFinite(value)) continue;
         buckets[metric][index].sum += value;
         buckets[metric][index].count += 1;
       }
@@ -446,40 +432,39 @@ export function buildAllMetricHistories(
       );
       results[metric] = {
         values,
-        hasData:
-          values.some((value) => value != null && value > 0) ||
-          sortedRecords.length > 0,
+        hasData: values.some((value) => value != null),
+        timestamps: Array.from(
+          { length: targetLen },
+          (_, i) => startMs + (i + 1) * slotMs,
+        ),
       };
     }
     return results;
   }
 
   if (hours <= 24 && recentRecords.length > 0) {
-    const recentMetrics: MetricKey[] = [
-      "cpu",
-      "mem",
-      "netin",
-      "netout",
-      "load1",
-    ];
-    const series = Object.fromEntries(
-      recentMetrics.map((metric) => [metric, [] as number[]]),
-    ) as Partial<Record<MetricKey, number[]>>;
-    for (const record of recentRecords) {
-      for (const metric of recentMetrics) {
-        series[metric]!.push(recentMetricValue(record, metric, totals));
-      }
-    }
-    for (const metric of recentMetrics) {
-      const values = series[metric]!;
-      results[metric] = {
-        values: padSeriesLeft(
-          downsampleSeries(values, Math.min(values.length, targetLen)),
-          targetLen,
-        ),
-        hasData: values.length > 0,
-      };
-    }
+    // Use actual sample times and the same buckets as persisted history.
+    return buildAllMetricHistories(
+      hours,
+      totals,
+      recentRecords.map((r) => ({
+        time: r.updated_at,
+        cpu: r.cpu?.usage,
+        ram: r.ram?.used,
+        ram_total: r.ram?.total,
+        swap: r.swap?.used,
+        swap_total: r.swap?.total,
+        disk: r.disk?.used,
+        disk_total: r.disk?.total,
+        net_in: r.network?.down,
+        net_out: r.network?.up,
+        connections: r.connections?.tcp,
+        connections_udp: r.connections?.udp,
+        process: r.process,
+        load: r.load?.load1,
+      })) as LoadRecord[],
+      [],
+    );
   }
 
   return results;
@@ -512,7 +497,9 @@ export function aggregateLivePing(
   return averagePositive(values);
 }
 
-export function parseLivePing(raw: unknown): Record<string, LivePingStat> | undefined {
+export function parseLivePing(
+  raw: unknown,
+): Record<string, LivePingStat> | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw !== "object") return undefined;
   const out: Record<string, LivePingStat> = {};
@@ -635,8 +622,7 @@ export function buildPingChartRows(
     };
     for (const task of tasks) {
       const val = grouped[a]?.[task.id];
-      row[String(task.id)] =
-        val !== undefined && val >= 0 ? val : null;
+      row[String(task.id)] = val !== undefined && val >= 0 ? val : null;
     }
     return row;
   });
@@ -693,7 +679,8 @@ export function downsampleSeriesAvgNullable(
 ): (number | null)[] {
   if (targetLen <= 0) return [];
   if (values.length === 0) return Array(targetLen).fill(null);
-  if (values.length <= targetLen) return downsampleSeriesNullable(values, targetLen);
+  if (values.length <= targetLen)
+    return downsampleSeriesNullable(values, targetLen);
 
   const result: (number | null)[] = [];
   for (let i = 0; i < targetLen; i++) {
@@ -731,7 +718,11 @@ export function smoothSeriesTriangularNullable(
     }
     let sum = 0;
     let weight = 0;
-    for (let j = Math.max(0, i - radius); j <= Math.min(n - 1, i + radius); j++) {
+    for (
+      let j = Math.max(0, i - radius);
+      j <= Math.min(n - 1, i + radius);
+      j++
+    ) {
       const v = values[j];
       if (v == null || !Number.isFinite(v)) continue;
       const w = radius + 1 - Math.abs(i - j);

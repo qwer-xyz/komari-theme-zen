@@ -1,3 +1,4 @@
+import { mapWithConcurrency } from "@/lib/requestQueue";
 /**
  * @license
  * SPDX-License-Identifier: MIT
@@ -28,7 +29,9 @@ import {
 } from "@/lib/rpcCapability";
 import {
   fetchRecentRecords,
+  fetchLegacyLoadRecords,
   queryCommonRecords,
+  queryRecords,
 } from "@/lib/recordQueries";
 
 const HISTORY_HOURS = 1;
@@ -47,32 +50,14 @@ function extractLoadRecords(raw: unknown): LoadRecord[] {
   );
 }
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  mapper: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const index = nextIndex++;
-      results[index] = await mapper(items[index]);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
-  );
-  return results;
-}
-
 async function fetchRecent(
   uuid: string,
+  signal: AbortSignal,
 ): Promise<DashboardTrendSample[] | null> {
   try {
-    return recentRecordsToDashboardTrend(await fetchRecentRecords(uuid));
+    return recentRecordsToDashboardTrend(
+      await fetchRecentRecords(uuid, signal),
+    );
   } catch {
     return null;
   }
@@ -81,24 +66,26 @@ async function fetchRecent(
 async function fetchLoadRecords(
   call: ReturnType<typeof useRPC2Call>["call"],
   uuid: string,
+  signal: AbortSignal,
 ): Promise<LoadRecord[]> {
   try {
-    const result = await queryCommonRecords<unknown>(call, {
-      uuid,
-      type: "load",
-      hours: HISTORY_HOURS,
-    });
+    const result = await queryCommonRecords<unknown>(
+      call,
+      {
+        uuid,
+        type: "load",
+        hours: HISTORY_HOURS,
+      },
+      signal,
+    );
     return extractLoadRecords(result);
   } catch (rpcError) {
+    signal.throwIfAborted();
     if (!isRpcMethodUnsupported(rpcError)) throw rpcError;
     try {
-      const response = await fetch(
-        `/api/records/load?uuid=${encodeURIComponent(uuid)}&hours=${HISTORY_HOURS}`,
-        { signal: AbortSignal.timeout(15_000) },
+      return extractLoadRecords(
+        await fetchLegacyLoadRecords(uuid, HISTORY_HOURS, signal),
       );
-      if (!response.ok) throw rpcError;
-      const json = (await response.json()) as { data?: unknown };
-      return extractLoadRecords(json.data);
     } catch {
       throw rpcError;
     }
@@ -109,15 +96,22 @@ async function fetchNodeTrend(
   call: ReturnType<typeof useRPC2Call>["call"],
   uuid: string,
   recordEnabled: boolean,
+  signal: AbortSignal,
 ): Promise<[string, DashboardTrendSample[]] | null> {
   let hasSuccessfulSource = false;
   if (recordEnabled) {
-    const loadRecords = await fetchLoadRecords(call, uuid);
-    hasSuccessfulSource = true;
-    const samples = loadRecordsToDashboardTrend(loadRecords);
-    if (samples.length) return [uuid, samples];
+    const loadRecords = await fetchLoadRecords(call, uuid, signal).catch(
+      () => null,
+    );
+    signal.throwIfAborted();
+    if (loadRecords) {
+      hasSuccessfulSource = true;
+      const samples = loadRecordsToDashboardTrend(loadRecords);
+      if (samples.length) return [uuid, samples];
+    }
   }
-  const recent = await fetchRecent(uuid);
+  signal.throwIfAborted();
+  const recent = await fetchRecent(uuid, signal);
   if (recent) return [uuid, recent];
   return hasSuccessfulSource ? [uuid, []] : null;
 }
@@ -125,26 +119,35 @@ async function fetchNodeTrend(
 async function fetchMetricTrends(
   call: ReturnType<typeof useRPC2Call>["call"],
   entityIds: string[],
+  signal: AbortSignal,
 ): Promise<Map<string, DashboardTrendSample[]> | null> {
   if (!canTryRpcMethod(METRIC_METHOD)) return null;
 
   try {
     const entityIdSet = new Set(entityIds);
-    const response = await call<unknown, QueryMetricsResponse>(METRIC_METHOD, {
-      metric_keys: ["cpu.usage", "net.in.rate", "net.out.rate"],
-      entity_ids: entityIds,
-      hours: HISTORY_HOURS,
-      aggregation: "avg",
-      fill_empty: true,
-      max_points: 36,
-    });
+    const response = await queryRecords<QueryMetricsResponse>(
+      call,
+      METRIC_METHOD,
+      {
+        metric_keys: ["cpu.usage", "net.in.rate", "net.out.rate"],
+        entity_ids: entityIds,
+        hours: HISTORY_HOURS,
+        aggregation: "avg",
+        fill_empty: true,
+        max_points: 36,
+      },
+      signal,
+    );
     if (!Array.isArray(response?.series)) {
       throw new Error("Invalid metrics response");
     }
 
     const buckets = new Map<
       string,
-      Map<number, { cpu?: number | null; netIn?: number | null; netOut?: number | null }>
+      Map<
+        number,
+        { cpu?: number | null; netIn?: number | null; netOut?: number | null }
+      >
     >();
     for (const series of response.series) {
       if (!entityIdSet.has(series.entity_id)) continue;
@@ -217,6 +220,7 @@ export function useDashboardOverviewTrends(
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     let timer: number | undefined;
     let running = false;
 
@@ -230,7 +234,7 @@ export function useDashboardOverviewTrends(
       running = true;
       try {
         const metricHistories = recordEnabled
-          ? await fetchMetricTrends(call, onlineNodeIds)
+          ? await fetchMetricTrends(call, onlineNodeIds, controller.signal)
           : null;
         if (metricHistories) {
           if (!cancelled) setHistories(metricHistories);
@@ -238,7 +242,9 @@ export function useDashboardOverviewTrends(
           const entries = await mapWithConcurrency(
             onlineNodeIds,
             CONCURRENCY,
-            (uuid) => fetchNodeTrend(call, uuid, recordEnabled),
+            (uuid) =>
+              fetchNodeTrend(call, uuid, recordEnabled, controller.signal),
+            controller.signal,
           );
           if (!cancelled) {
             const fetched = new Map(
@@ -279,6 +285,7 @@ export function useDashboardOverviewTrends(
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       cancelled = true;
+      controller.abort();
       if (timer) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };

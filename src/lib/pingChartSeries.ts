@@ -11,7 +11,11 @@ export function buildProbeSeriesByTask(
   const points: PingPoint[] = [];
   for (const rec of records) {
     if (rec.task_id !== taskId) continue;
-    if (typeof rec.value !== "number" || !Number.isFinite(rec.value) || rec.value <= 0) {
+    if (
+      typeof rec.value !== "number" ||
+      !Number.isFinite(rec.value) ||
+      rec.value <= 0
+    ) {
       continue;
     }
     const t = timestampMs(rec.time);
@@ -101,7 +105,10 @@ function triangleArea(
 }
 
 /** Largest-Triangle-Three-Buckets — preserves visual shape when decimating. */
-export function lttbDownsample(points: PingPoint[], targetLen: number): PingPoint[] {
+export function lttbDownsample(
+  points: PingPoint[],
+  targetLen: number,
+): PingPoint[] {
   if (targetLen <= 0) return [];
   if (points.length <= targetLen) return points.slice();
   if (targetLen === 1) return [points[0]];
@@ -161,7 +168,10 @@ export function lttbDownsample(points: PingPoint[], targetLen: number): PingPoin
 }
 
 /** Min-max bucket downsample — keeps spikes visible in overview envelopes. */
-export function minMaxDownsample(points: PingPoint[], targetLen: number): PingPoint[] {
+export function minMaxDownsample(
+  points: PingPoint[],
+  targetLen: number,
+): PingPoint[] {
   if (targetLen <= 0) return [];
   if (points.length <= targetLen) return points.slice();
   if (targetLen === 1) return [points[0]];
@@ -171,7 +181,10 @@ export function minMaxDownsample(points: PingPoint[], targetLen: number): PingPo
 
   for (let i = 0; i < targetLen - 2; i++) {
     const start = Math.floor(i * bucketSize) + 1;
-    const end = Math.min(points.length - 1, Math.floor((i + 1) * bucketSize) + 1);
+    const end = Math.min(
+      points.length - 1,
+      Math.floor((i + 1) * bucketSize) + 1,
+    );
     if (start >= end) continue;
 
     let minP = points[start];
@@ -220,7 +233,9 @@ export function downsamplePingSeries(
       ? splitSeriesByGap(points, gapBreakMs)
       : [points];
 
-  return segments.map((segment) => downsamplePingSegment(segment, maxPoints, mode));
+  return segments.map((segment) =>
+    downsamplePingSegment(segment, maxPoints, mode),
+  );
 }
 
 export type ProbeDrawPlan = {
@@ -247,7 +262,10 @@ export function buildProbeDrawPlan(
 
   const naturalSegments = splitSeriesByGap(points, gapBreakMs);
   const segCount = naturalSegments.length;
-  const perSegBudget = Math.max(2, Math.floor(maxPoints / Math.max(1, segCount)));
+  const perSegBudget = Math.max(
+    2,
+    Math.floor(maxPoints / Math.max(1, segCount)),
+  );
 
   const solidSegments = naturalSegments.map((segment) =>
     downsamplePingSegment(segment, perSegBudget, mode),
@@ -323,10 +341,14 @@ export function maxLatencyInPoints(
 }
 
 /** Nearest sample time to target within sorted points (binary search). */
-export function nearestPointTime(points: PingPoint[], targetT: number): number | null {
+export function nearestPointTime(
+  points: PingPoint[],
+  targetT: number,
+): number | null {
   if (points.length === 0) return null;
   if (targetT <= points[0].t) return points[0].t;
-  if (targetT >= points[points.length - 1].t) return points[points.length - 1].t;
+  if (targetT >= points[points.length - 1].t)
+    return points[points.length - 1].t;
 
   let lo = 0;
   let hi = points.length - 1;
@@ -369,40 +391,47 @@ export function findGapsInSeries(
   return gaps;
 }
 
+function lowerBound(points: PingPoint[], time: number): number {
+  let lo = 0,
+    hi = points.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (points[mid].t < time) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
 export function gapContainingTime(
   points: PingPoint[],
   gapBreakMs: number,
   targetT: number,
 ): PingGap | null {
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1];
-    const cur = points[i];
-    const durationMs = cur.t - prev.t;
-    if (durationMs > gapBreakMs && targetT > prev.t && targetT < cur.t) {
-      return { afterT: prev.t, beforeT: cur.t, durationMs };
-    }
-  }
-  return null;
+  const i = lowerBound(points, targetT);
+  const prev = points[i - 1],
+    cur = points[i];
+  if (!prev || !cur) return null;
+  const durationMs = cur.t - prev.t;
+  return durationMs > gapBreakMs && targetT > prev.t && targetT < cur.t
+    ? { afterT: prev.t, beforeT: cur.t, durationMs }
+    : null;
 }
-
-/** Nearest sample within tolerance; otherwise null (honest missing data). */
 export function valueAtTime(
   points: PingPoint[],
   targetT: number,
   maxDistanceMs?: number,
 ): number | null {
-  if (points.length === 0) return null;
-  let best: PingPoint | null = null;
-  let bestDist = Infinity;
-  for (const p of points) {
-    const d = Math.abs(p.t - targetT);
-    if (d < bestDist) {
-      bestDist = d;
-      best = p;
-    }
-  }
-  if (best == null) return null;
-  if (maxDistanceMs != null && bestDist > maxDistanceMs) return null;
+  const i = lowerBound(points, targetT);
+  const before = points[i - 1],
+    after = points[i];
+  const best =
+    before && (!after || targetT - before.t <= after.t - targetT)
+      ? before
+      : after;
+  if (
+    !best ||
+    (maxDistanceMs != null && Math.abs(best.t - targetT) > maxDistanceMs)
+  )
+    return null;
   return best.v;
 }
 
@@ -442,7 +471,9 @@ export function buildOverviewEnvelope(
   }
 
   const envelope: PingPoint[] = [];
-  for (const [key, { min, max }] of [...buckets.entries()].sort((a, b) => a[0] - b[0])) {
+  for (const [key, { min, max }] of [...buckets.entries()].sort(
+    (a, b) => a[0] - b[0],
+  )) {
     const t = key * bucketMs + bucketMs / 2;
     envelope.push({ t, v: min });
     if (max !== min) envelope.push({ t: t + 1, v: max });

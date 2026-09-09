@@ -1,3 +1,4 @@
+import { mapWithConcurrency } from "@/lib/requestQueue";
 import { useEffect, useState } from "react";
 import { useRPC2Call } from "@/contexts/RPC2Context";
 import { useRecordSettings } from "@/hooks/useRecordSettings";
@@ -11,32 +12,11 @@ const POLL_MS = 5 * 60_000;
 /** Enough window for card latency blocks at typical ping intervals (30–60s). */
 const HISTORY_HOURS = 1;
 
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let index = 0;
-
-  async function worker() {
-    while (index < items.length) {
-      const i = index++;
-      results[i] = await fn(items[i]);
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(limit, items.length) }, () =>
-    worker(),
-  );
-  await Promise.all(workers);
-  return results;
-}
-
 async function fetchLatencyHistories(
   call: ReturnType<typeof useRPC2Call>["call"],
   nodeUuids: string[],
   taskIds: number[],
+  signal: AbortSignal,
 ): Promise<Map<string, LatencySample[]>> {
   const allowedTasks = new Set(taskIds);
   const entries = await mapWithConcurrency<
@@ -47,11 +27,15 @@ async function fetchLatencyHistories(
     CONCURRENCY,
     async (uuid) => {
       try {
-        const result = await queryCommonRecords<PingRecordsResponse>(call, {
-          uuid,
-          type: "ping",
-          hours: HISTORY_HOURS,
-        });
+        const result = await queryCommonRecords<PingRecordsResponse>(
+          call,
+          {
+            uuid,
+            type: "ping",
+            hours: HISTORY_HOURS,
+          },
+          signal,
+        );
         const tasks = (result?.tasks ?? []).filter(
           (task) => allowedTasks.size === 0 || allowedTasks.has(task.id),
         );
@@ -59,15 +43,13 @@ async function fetchLatencyHistories(
           (record) =>
             allowedTasks.size === 0 || allowedTasks.has(record.task_id),
         );
-        const samples = pingRecordsToLatencyHistory(
-          records,
-          tasks,
-        );
+        const samples = pingRecordsToLatencyHistory(records, tasks);
         return [uuid, samples] as [string, LatencySample[]];
       } catch {
         return null;
       }
     },
+    signal,
   );
 
   const map = new Map<string, LatencySample[]>();
@@ -98,6 +80,7 @@ export function useLatencyCardHistory(
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     let timer: number | undefined;
     let running = false;
 
@@ -114,7 +97,12 @@ export function useLatencyCardHistory(
       if (initial) setIsLoading(true);
 
       try {
-        const map = await fetchLatencyHistories(call, nodeUuids, taskIds);
+        const map = await fetchLatencyHistories(
+          call,
+          nodeUuids,
+          taskIds,
+          controller.signal,
+        );
         if (cancelled) return;
         setHistory((previous) => {
           const next = new Map<string, LatencySample[]>();
@@ -144,6 +132,7 @@ export function useLatencyCardHistory(
 
     return () => {
       cancelled = true;
+      controller.abort();
       if (timer) window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };

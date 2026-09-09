@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
 
 import type { NodeViewMode } from "@/hooks/useViewMode";
@@ -7,10 +8,7 @@ import {
   colorSchemeFromTheme,
   type ColorSchemeSettings,
 } from "@/lib/colorScheme";
-import {
-  fontSchemeFromTheme,
-  type FontSchemeSettings,
-} from "@/lib/fontScheme";
+import { fontSchemeFromTheme, type FontSchemeSettings } from "@/lib/fontScheme";
 import {
   latencyColorConfigFromTheme,
   type LatencyColorConfig,
@@ -100,7 +98,17 @@ function parseArraySetting<T extends string | number>(
 
 export function useThemeSettings(): ThemeSettings {
   const { publicInfo } = usePublicInfo();
-  const raw = (publicInfo?.theme_settings ?? {}) as Record<string, unknown>;
+  return useMemo(
+    () => parseThemeSettings(publicInfo?.theme_settings),
+    [publicInfo?.theme_settings],
+  );
+}
+
+export function parseThemeSettings(settings: unknown): ThemeSettings {
+  const raw =
+    settings && typeof settings === "object" && !Array.isArray(settings)
+      ? (settings as Record<string, unknown>)
+      : {};
 
   return {
     showLogo: raw.showLogo === true,
@@ -131,7 +139,8 @@ export function useThemeSettings(): ThemeSettings {
     ),
     dashboardNodeIds: parseArraySetting<string>(raw.dashboardNodeIds, "string"),
     pingTaskIds: parseArraySetting<number>(raw.pingTaskIds, "number"),
-    customFooterHtml: (raw.customFooterHtml as string | undefined) ?? "",
+    customFooterHtml:
+      typeof raw.customFooterHtml === "string" ? raw.customFooterHtml : "",
     defaultViewMode: parseDefaultViewMode(raw.defaultViewMode),
     defaultSortField: parseThemeSelectOption(raw.defaultSortField, "Default"),
     defaultSortOrder: parseThemeSelectOption(raw.defaultSortOrder, "Ascending"),

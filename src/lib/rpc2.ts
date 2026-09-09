@@ -27,7 +27,8 @@ export class RPC2ResponseError extends Error {
 }
 
 function transportError(message: string, cause?: unknown): RPC2TransportError {
-  const detail = cause instanceof Error && cause.message ? `: ${cause.message}` : "";
+  const detail =
+    cause instanceof Error && cause.message ? `: ${cause.message}` : "";
   return new RPC2TransportError(`${message}${detail}`);
 }
 
@@ -265,9 +266,13 @@ export class RPC2Client {
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort(options.signal?.reason);
     if (options.signal?.aborted) abortFromCaller();
-    else options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+    else
+      options.signal?.addEventListener("abort", abortFromCaller, {
+        once: true,
+      });
     const timeout = setTimeout(
-      () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
+      () =>
+        controller.abort(new DOMException("Request timed out", "TimeoutError")),
       options.timeout ?? this.options.requestTimeout,
     );
 
@@ -304,10 +309,7 @@ export class RPC2Client {
       } catch (error) {
         throw transportError("RPC 响应不是有效 JSON", error);
       }
-      if (
-        jsonResponse.jsonrpc !== "2.0" ||
-        jsonResponse.id !== request.id
-      ) {
+      if (jsonResponse.jsonrpc !== "2.0" || jsonResponse.id !== request.id) {
         throw new RPC2TransportError("RPC 响应 ID 或版本不匹配");
       }
       if ("error" in jsonResponse) {
@@ -345,7 +347,8 @@ export class RPC2Client {
 
     const controller = new AbortController();
     const timeout = setTimeout(
-      () => controller.abort(new DOMException("Request timed out", "TimeoutError")),
+      () =>
+        controller.abort(new DOMException("Request timed out", "TimeoutError")),
       this.options.requestTimeout,
     );
     try {
@@ -430,15 +433,27 @@ export class RPC2Client {
     }
 
     if (this.connectionState === RPC2ConnectionState.CONNECTED) {
+      const attemptedSocket = this.ws;
       try {
         return await this.callViaWebSocket(method, params, {
           ...options,
-          timeout: timeoutBudget,
+          timeout:
+            options.allowHttpFallback === false
+              ? timeoutBudget
+              : Math.min(5_000, timeoutBudget / 2),
         });
       } catch (error) {
         if (error instanceof RPC2ResponseError) throw error;
         if (this.manuallyDisconnected || options.signal?.aborted) throw error;
         if (!(error instanceof RPC2TransportError)) throw error;
+        if (this.ws === attemptedSocket) {
+          this.ws = null;
+          this.stopHeartbeat();
+          this.setConnectionState(RPC2ConnectionState.DISCONNECTED);
+          this.clearPendingRequests(error);
+          attemptedSocket?.close();
+          if (this.options.autoReconnect) this.attemptReconnect();
+        }
         if (options.allowHttpFallback === false) throw error;
         const remaining = deadline - Date.now();
         if (remaining <= 0) throw error;
@@ -486,9 +501,7 @@ export class RPC2Client {
       this.ws = null;
       this.setConnectionState(RPC2ConnectionState.DISCONNECTED);
       this.stopHeartbeat();
-      this.clearPendingRequests(
-        new RPC2TransportError("WebSocket 连接已断开"),
-      );
+      this.clearPendingRequests(new RPC2TransportError("WebSocket 连接已断开"));
       this.eventListeners.onDisconnect?.();
 
       if (
@@ -586,9 +599,12 @@ export class RPC2Client {
 
     const exponentialDelay = Math.min(
       30_000,
-      this.options.reconnectInterval * 2 ** Math.max(0, this.reconnectAttempts - 1),
+      this.options.reconnectInterval *
+        2 ** Math.max(0, this.reconnectAttempts - 1),
     );
-    const jitteredDelay = Math.round(exponentialDelay * (0.8 + Math.random() * 0.4));
+    const jitteredDelay = Math.round(
+      exponentialDelay * (0.8 + Math.random() * 0.4),
+    );
     this.reconnectTimeout = setTimeout(() => {
       this.connect().catch(() => undefined);
     }, jitteredDelay);

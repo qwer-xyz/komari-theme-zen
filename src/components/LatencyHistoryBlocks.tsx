@@ -66,10 +66,14 @@ type LatencyBlockProps = {
   mean: number | null;
   optionId: string;
   selected: boolean;
-  setTriggerRef: (el: HTMLSpanElement | null) => void;
-  onShow: () => void;
+  index: number;
+  triggerRefs: React.MutableRefObject<(HTMLSpanElement | null)[]>;
+  onShow: (index: number) => void;
   onHide: () => void;
-  onTogglePinned: (event: React.MouseEvent | React.KeyboardEvent) => void;
+  onTogglePinned: (
+    index: number,
+    event: React.MouseEvent | React.KeyboardEvent,
+  ) => void;
 };
 
 function LatencyBlock({
@@ -79,7 +83,8 @@ function LatencyBlock({
   mean,
   optionId,
   selected,
-  setTriggerRef,
+  index,
+  triggerRefs,
   onShow,
   onHide,
   onTogglePinned,
@@ -102,16 +107,18 @@ function LatencyBlock({
   return (
     <span
       id={hasData ? optionId : undefined}
-      ref={setTriggerRef}
+      ref={(el) => {
+        triggerRefs.current[index] = el;
+      }}
       role={hasData ? "option" : undefined}
       aria-selected={hasData ? selected : undefined}
       aria-label={hasData ? tipText : undefined}
       aria-hidden={hasData ? undefined : true}
       title={hasData ? tipText : undefined}
       className={`flex h-full min-w-0 items-end ${hasData ? "cursor-pointer" : "cursor-default"}`}
-      onMouseEnter={hasData ? onShow : undefined}
+      onMouseEnter={hasData ? () => onShow(index) : undefined}
       onMouseLeave={hasData ? onHide : undefined}
-      onClick={hasData ? onTogglePinned : undefined}
+      onClick={hasData ? (event) => onTogglePinned(index, event) : undefined}
     >
       <span
         aria-hidden
@@ -397,19 +404,18 @@ export function LatencyHistoryBlocks({
         >
           {blocks.map((sample, i) => (
             <MemoLatencyBlock
-              key={`${sample.t}-${i}`}
+              key={i}
+              index={i}
               sample={sample}
               theme={theme}
               colorConfig={colorConfig}
               mean={mean}
               optionId={`${historyId}-sample-${i}`}
               selected={activeTooltip?.index === i}
-              setTriggerRef={(el) => {
-                triggerRefs.current[i] = el;
-              }}
-              onShow={() => showTooltip(i)}
+              triggerRefs={triggerRefs}
+              onShow={showTooltip}
               onHide={hideTooltip}
-              onTogglePinned={(event) => togglePinnedTooltip(i, event)}
+              onTogglePinned={togglePinnedTooltip}
             />
           ))}
         </span>
