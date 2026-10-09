@@ -410,7 +410,6 @@ export function ConsoleHeader({
     dashboardCpuMetric,
     dashboardBandwidthMetric,
     dashboardNodeIds,
-    showNetworkQuality,
   } = useThemeSettings();
   const showOverviewHeroes =
     dashboardOverviewSections === "All" ||
@@ -539,37 +538,6 @@ export function ConsoleHeader({
   const totalRegions = new Set(
     overviewNodes.map((n) => n.flag).filter((f) => f && f !== "🌐"),
   ).size;
-
-  const latencyNodes = onlineNodes.filter((node) => node.pingTaskCount > 0);
-  const averageLatency = latencyNodes.length
-    ? latencyNodes.reduce((sum, node) => sum + node.latency, 0) /
-      latencyNodes.length
-    : 0;
-  const peakLossNode = latencyNodes.reduce<VPSNode | null>(
-    (peak, node) => (!peak || node.pingLoss > peak.pingLoss ? node : peak),
-    null,
-  );
-  const unstableNodes = latencyNodes.filter(
-    (node) => node.pingLoss >= 1 || node.pingVolatility >= 0.6,
-  );
-  const attentionNode = unstableNodes.reduce<VPSNode | null>(
-    (worst, node) =>
-      !worst ||
-      node.pingLoss > worst.pingLoss ||
-      (node.pingLoss === worst.pingLoss &&
-        node.pingVolatility > worst.pingVolatility)
-        ? node
-        : worst,
-    null,
-  );
-  const networkHealthTone =
-    latencyNodes.length === 0
-      ? "quiet"
-      : (peakLossNode?.pingLoss ?? 0) >= 5 || averageLatency >= 300
-        ? "danger"
-        : unstableNodes.length > 0 || averageLatency >= 150
-          ? "warning"
-          : "stable";
 
   const residualValueLabel = residualValue.loading
     ? "..."
@@ -881,47 +849,6 @@ export function ConsoleHeader({
               showNodeMap={showNodeMap}
               nodeMapLabel={t.lblNodeDistribution}
               onOpenNodeMap={() => setMapOpen(true)}
-              networkHealth={
-                showNetworkQuality
-                  ? {
-                      label: t.overviewNetworkQuality,
-                      status:
-                        latencyNodes.length === 0
-                          ? t.overviewNetworkNoData
-                          : networkHealthTone === "stable"
-                            ? t.overviewNetworkStable
-                            : t.overviewNetworkAttention,
-                      tone: networkHealthTone,
-                      metrics: [
-                        {
-                          label: t.overviewAverageLatency,
-                          value: latencyNodes.length
-                            ? `${averageLatency.toFixed(0)} ms`
-                            : "—",
-                          detail: latencyNodes.length
-                            ? `${latencyNodes.length} ${t.unitNodes}`
-                            : undefined,
-                        },
-                        {
-                          label: t.overviewPeakLoss,
-                          value: peakLossNode
-                            ? `${peakLossNode.pingLoss.toFixed(1)}%`
-                            : "—",
-                          detail: peakLossNode
-                            ? `${t.overviewWorstNode}: ${peakLossNode.name}`
-                            : undefined,
-                        },
-                        {
-                          label: t.overviewUnstableNodes,
-                          value: latencyNodes.length
-                            ? `${unstableNodes.length} / ${latencyNodes.length}`
-                            : "—",
-                          detail: attentionNode?.name,
-                        },
-                      ],
-                    }
-                  : undefined
-              }
             />
           ) : (
             <>

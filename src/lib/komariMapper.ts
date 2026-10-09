@@ -127,6 +127,7 @@ export function mapKomariNodeToVps(
     virtualization: node.virtualization,
     kernelVersion: node.kernel_version,
     gpuName: node.gpu_name,
+    gpuLive: online ? live?.gpu : undefined,
     clientVersion: node.version,
     createdAt: node.created_at,
     updatedAt:

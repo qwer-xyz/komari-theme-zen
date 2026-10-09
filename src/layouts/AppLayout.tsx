@@ -38,7 +38,6 @@ export function AppLayout() {
     customFooterHtml,
     showNodeMap,
     showLatency,
-    showNetworkQuality,
     colorScheme,
     fontScheme,
   } = useThemeSettings();
@@ -51,7 +50,7 @@ export function AppLayout() {
     lastSuccessAt,
     refreshNodes,
   } = useKomariNodes({
-    loadPingSummary: !isDetail && showNetworkQuality,
+    loadPingSummary: false,
     loadLatencyHistory: !isDetail && showLatency,
   });
   const {

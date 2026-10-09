@@ -1215,10 +1215,11 @@ export function NodeTable({
 
   // Styling helpers
   const borderBottomClass = "border-zen-line-strong";
-  const toolbarPanelClass = "border-zen-border-muted bg-zen-elevate/15";
+  const toolbarPanelClass = "border-zen-line bg-zen-surface/70";
   const groupChipIdle =
-    "border border-zen-border text-zen-fg-subtle hover:border-zen-fg-muted hover:text-zen-fg-strong";
-  const segmentTrackClass = "border border-zen-border bg-zen-fill-muted/30";
+    "border border-zen-line bg-zen-bg/20 text-zen-fg-muted hover:border-zen-line-strong hover:text-zen-fg-strong";
+  const segmentTrackClass = "border border-zen-line bg-zen-bg/45";
+  const mobilePillClass = "border border-zen-accent/30 bg-zen-accent/10 shadow-none";
 
   const groupTabItems = useMemo(
     () => [
@@ -1481,7 +1482,7 @@ export function NodeTable({
     >
       {/* Mobile toolbar card */}
       <div
-        className={`space-y-4 lg:hidden rounded-xl border p-4 ${toolbarPanelClass}`}
+        className={`km-mobile-toolbar space-y-4 lg:hidden rounded-xl border p-4 ${toolbarPanelClass}`}
       >
         {showGroupTabs ? (
           <div className="relative min-w-0">
@@ -1502,6 +1503,7 @@ export function NodeTable({
               ref={groupScrollRef}
               variant="pill"
               scrollable
+              indicatorClassName={mobilePillClass}
               tabs={groupTabItems}
               value={activeGroup}
               onChange={handleGroupChange}
@@ -1526,6 +1528,7 @@ export function NodeTable({
                 ariaLabel={t.viewMode}
                 variant="pill"
                 tabs={viewModeTabs}
+                indicatorClassName={mobilePillClass}
                 value={viewMode}
                 onChange={(id) => setViewMode(id as "list" | "card")}
                 tabClassName={`${zenTouch.btn} rounded-full px-3.5 py-1 font-mono ${zenType.caption} zen-track-tight font-bold`}
@@ -1545,7 +1548,7 @@ export function NodeTable({
               }}
               placeholder={t.search}
               aria-label={t.search}
-              className={`w-full min-w-0 rounded-md border border-zen-line-strong bg-zen-elevate/15 px-3 py-2 transition-[border-color,box-shadow] font-mono ${zenType.body} tracking-wide uppercase ${textPrimary} placeholder:text-zen-fg-faint/60`}
+              className={`w-full min-w-0 rounded-md border border-zen-line-strong bg-zen-bg/35 px-3 py-2 transition-[border-color,box-shadow] font-mono ${zenType.body} tracking-wide uppercase ${textPrimary} placeholder:text-zen-fg-muted`}
             />
             {searchTerm ? (
               <button

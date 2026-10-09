@@ -35,7 +35,6 @@ export type ThemeSettings = {
   defaultSortField: string;
   defaultSortOrder: string;
   showLatency: boolean;
-  showNetworkQuality: boolean;
   showNodeMap: boolean;
   latencyColorConfig: LatencyColorConfig;
   colorScheme: ColorSchemeSettings;
@@ -145,7 +144,6 @@ export function parseThemeSettings(settings: unknown): ThemeSettings {
     defaultSortField: parseThemeSelectOption(raw.defaultSortField, "Default"),
     defaultSortOrder: parseThemeSelectOption(raw.defaultSortOrder, "Ascending"),
     showLatency: raw.showLatency !== false,
-    showNetworkQuality: raw.showNetworkQuality !== false,
     showNodeMap: raw.showNodeMap !== false,
     latencyColorConfig: latencyColorConfigFromTheme(raw),
     colorScheme: colorSchemeFromTheme(raw),

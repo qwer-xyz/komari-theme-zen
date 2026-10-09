@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import type { LiveDataResponse } from "../types/LiveData";
 import { parseLivePing } from "@/lib/recordTransform";
+import { parseLiveGpu } from "@/lib/liveGpu";
 import { finiteNumber, nonNegativeNumber } from "@/lib/numeric";
 import { useRPC2Call } from "./RPC2Context";
 
@@ -134,10 +135,7 @@ export const LiveDataProvider: React.FC<{ children: React.ReactNode }> = ({
               tcp: nonNegativeNumber(v.connections),
               udp: nonNegativeNumber(v.connections_udp),
             },
-            gpu:
-              v.gpu !== undefined && v.gpu !== null
-                ? { count: 0, average_usage: finiteNumber(v.gpu), detailed_info: [] }
-                : undefined,
+            gpu: parseLiveGpu(v),
             uptime: nonNegativeNumber(v.uptime),
             process: nonNegativeNumber(v.process),
             message: "",

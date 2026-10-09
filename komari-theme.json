@@ -284,19 +284,6 @@
         }
       },
       {
-        "key": "showNetworkQuality",
-        "type": "switch",
-        "name": {
-          "en": "Show homepage network quality",
-          "zh-CN": "显示首页网络质量"
-        },
-        "default": true,
-        "help": {
-          "en": "Show the network quality summary below the homepage overview.",
-          "zh-CN": "在首页核心概览下方显示网络质量摘要。"
-        }
-      },
-      {
         "key": "pingTaskIds",
         "type": "pingtasks",
         "name": {
@@ -305,8 +292,8 @@
         },
         "default": "[]",
         "help": {
-          "en": "Choose Ping tasks used by cards, network quality and node details. Empty includes all tasks.",
-          "zh-CN": "选择卡片、网络质量和节点详情使用的 Ping 任务，留空表示全部任务。"
+          "en": "Choose Ping tasks used by cards and node details. Empty includes all tasks.",
+          "zh-CN": "选择卡片和节点详情使用的 Ping 任务，留空表示全部任务。"
         }
       },
       {

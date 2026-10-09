@@ -127,14 +127,6 @@ export type Messages = {
   overviewAllOnline: string;
   overviewOfflineCount: (count: number) => string;
   overviewRecentHourTrend: string;
-  overviewNetworkQuality: string;
-  overviewNetworkStable: string;
-  overviewNetworkAttention: string;
-  overviewNetworkNoData: string;
-  overviewAverageLatency: string;
-  overviewPeakLoss: string;
-  overviewUnstableNodes: string;
-  overviewWorstNode: string;
   unitNodes: string;
   msgNodeOfflineAwaiting: string;
   pingNoTasks: string;

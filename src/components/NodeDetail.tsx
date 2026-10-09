@@ -4,6 +4,7 @@
  */
 
 import { sampleGpuRecords } from "@/lib/sampleGpuRecords";
+import { liveGpuDeviceAt, resolveGpuReading } from "@/lib/liveGpu";
 import { HistoryError } from "@/components/SectionErrorBoundary";
 import React from "react";
 import { Link } from "react-router-dom";
@@ -1032,7 +1033,6 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
     () =>
       gpuDevices.map((device) => {
         const records = sampleGpuRecords(device.records);
-        const latest = records[records.length - 1];
         return {
           ...device,
           utilization: records.map((record) => record.utilization),
@@ -1042,10 +1042,13 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
               : null,
           ),
           timestamps: records.map((record) => new Date(record.time).getTime()),
-          latest,
+          reading: resolveGpuReading(
+            liveGpuDeviceAt(node.gpuLive, device.device_index),
+            records[records.length - 1],
+          ),
         };
       }),
-    [gpuDevices],
+    [gpuDevices, node.gpuLive],
   );
 
   const numOnly = (a: (number | null)[]): number[] => a.filter(isNum);
@@ -2069,16 +2072,16 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                                 >
                                   {gpu.device_name}
                                 </span>
-                                {gpu.latest ? (
+                                {gpu.reading ? (
                                   <span className="inline-flex shrink-0 items-center gap-3 tabular-nums">
                                     <span className={textPrimary}>
                                       {formatStoragePair(
-                                        gpu.latest.mem_used / 1024 ** 3,
-                                        gpu.latest.mem_total / 1024 ** 3,
+                                        gpu.reading.memUsed / 1024 ** 3,
+                                        gpu.reading.memTotal / 1024 ** 3,
                                       )}
                                     </span>
                                     <span className="font-bold text-zen-warning">
-                                      {gpu.latest.temperature} °C
+                                      {gpu.reading.temperature} °C
                                     </span>
                                   </span>
                                 ) : null}

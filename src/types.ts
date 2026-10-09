@@ -4,6 +4,7 @@
  */
 
 import type { LatencySample } from "@/lib/latencyDisplay";
+import type { LiveGpu } from "@/lib/liveGpu";
 
 export type { LatencySample };
 
@@ -18,6 +19,7 @@ export interface VPSNode {
   virtualization: string;
   kernelVersion: string;
   gpuName: string;
+  gpuLive?: LiveGpu; // per-card live readings from getNodesLatestStatus
   clientVersion: string;
   createdAt: string | number;
   updatedAt: string | number;

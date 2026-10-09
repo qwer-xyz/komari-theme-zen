@@ -28,6 +28,7 @@ const fontScheme = await vite.ssrLoadModule(
 const pingSeries = await vite.ssrLoadModule("/src/lib/pingChartSeries.ts");
 const queue = await vite.ssrLoadModule("/src/lib/requestQueue.ts");
 const gpuSampler = await vite.ssrLoadModule("/src/lib/sampleGpuRecords.ts");
+const liveGpu = await vite.ssrLoadModule("/src/lib/liveGpu.ts");
 const residual = await vite.ssrLoadModule("/src/lib/residualValue.ts");
 
 test("same-currency value survives an unavailable exchange service", async () => {
@@ -84,6 +85,124 @@ test("GPU gaps stay empty instead of drawing across an outage", () => {
     ),
   );
   assert(sampled.includes(records[2]) && sampled.includes(records[3]));
+});
+
+test("live GPU status keeps the flat Komari 1.5 fields and rejects GPU-less nodes", () => {
+  const detailed = [
+    {
+      name: "Phoenix1",
+      memory_total: 24 * 1024 ** 3,
+      memory_used: 6 * 1024 ** 3,
+      utilization: 87.5,
+      temperature: 61,
+    },
+  ];
+  assert.deepEqual(
+    liveGpu.parseLiveGpu({
+      gpu: 87.5,
+      gpu_count: 1,
+      gpu_average_usage: 87.5,
+      gpu_detailed_info: detailed,
+    }),
+    { count: 1, average_usage: 87.5, detailed_info: detailed },
+  );
+
+  // `gpu` stays 0 and the detail fields are omitted for nodes without a card.
+  assert.equal(liveGpu.parseLiveGpu({ gpu: 0 }), undefined);
+  assert.equal(
+    liveGpu.parseLiveGpu({ gpu: 0, gpu_average_usage: 0, gpu_count: 0 }),
+    undefined,
+  );
+  // An idle card still reports its presence through the count.
+  assert.deepEqual(liveGpu.parseLiveGpu({ gpu: 0, gpu_count: 2 }), {
+    count: 2,
+    average_usage: 0,
+    detailed_info: [],
+  });
+
+  // Older builds nested the same shape under `gpu`, and before 1.5 it was a
+  // flat usage number with no device detail at all.
+  assert.deepEqual(
+    liveGpu.parseLiveGpu({
+      gpu: { count: 1, average_usage: 12.5, detailed_info: detailed },
+    }),
+    { count: 1, average_usage: 12.5, detailed_info: detailed },
+  );
+  assert.deepEqual(liveGpu.parseLiveGpu({ gpu: 12.5 }), {
+    count: 0,
+    average_usage: 12.5,
+    detailed_info: [],
+  });
+
+  // A missing count falls back to the reported devices, and junk is dropped
+  // rather than turned into a fake card.
+  const parsed = liveGpu.parseLiveGpu({
+    gpu: 0,
+    gpu_count: 1,
+    gpu_detailed_info: [{ name: "Phoenix1", memory_total: 1024 }, "junk"],
+  });
+  assert.equal(parsed.count, 1);
+  assert.equal(parsed.detailed_info.length, 1);
+  assert.deepEqual(parsed.detailed_info[0], {
+    name: "Phoenix1",
+    memory_total: 1024,
+    memory_used: 0,
+    utilization: 0,
+    temperature: 0,
+  });
+  assert.deepEqual(
+    liveGpu.parseLiveGpu({ gpu: 0, gpu_detailed_info: [{ name: "a" }, { name: "b" }] })
+      .detailed_info.map((device) => device.name),
+    ["a", "b"],
+  );
+});
+
+test("a GPU reading prefers the live sample and falls back to the stored record", () => {
+  const gib = (value) => value / 1024 ** 3;
+  const live = {
+    name: "Phoenix1",
+    memory_total: 24 * 1024 ** 3,
+    memory_used: 6 * 1024 ** 3,
+    utilization: 80,
+    temperature: 61,
+  };
+  const recorded = {
+    client: "node-1",
+    time: "2026-09-09T00:00:00Z",
+    device_index: 0,
+    device_name: "Phoenix1",
+    mem_total: 24 * 1024 ** 3,
+    mem_used: 3 * 1024 ** 3,
+    utilization: 40,
+    temperature: 50,
+  };
+  // Both sources measure memory in bytes, so the card reads the same either way.
+  const fromLive = liveGpu.resolveGpuReading(live, recorded);
+  assert.equal(fromLive.memTotal, recorded.mem_total);
+  assert.equal(gib(fromLive.memUsed), 6);
+  assert.equal(fromLive.temperature, 61);
+  const fromRecord = liveGpu.resolveGpuReading(undefined, recorded);
+  assert.equal(gib(fromRecord.memUsed), 3);
+  assert.equal(fromRecord.temperature, 50);
+  // An agent that could not read the card must not blank out a known total.
+  assert.equal(
+    liveGpu.resolveGpuReading({ ...live, memory_total: 0 }, recorded).memTotal,
+    recorded.mem_total,
+  );
+  assert.equal(liveGpu.resolveGpuReading(undefined, undefined), undefined);
+});
+
+test("live GPU devices are addressed the way the backend indexes them", () => {
+  const gpu = {
+    count: 2,
+    average_usage: 10,
+    detailed_info: [{ name: "first" }, { name: "second" }],
+  };
+  assert.equal(liveGpu.liveGpuDeviceAt(gpu, 0).name, "first");
+  assert.equal(liveGpu.liveGpuDeviceAt(gpu, 1).name, "second");
+  assert.equal(liveGpu.liveGpuDeviceAt(gpu, 2), undefined);
+  assert.equal(liveGpu.liveGpuDeviceAt(gpu, -1), undefined);
+  assert.equal(liveGpu.liveGpuDeviceAt(undefined, 0), undefined);
 });
 
 test("prototype names cannot select a font or color preset", () => {
