@@ -2,7 +2,7 @@
   "name": "Komari Zen",
   "short": "Zen",
   "description": "基于极简主义设计理念的 Komari 主题。",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "author": "qwer-xyz",
   "url": "https://github.com/qwer-xyz/komari-theme-zen",
   "preview": "preview.png",
@@ -304,7 +304,7 @@
           "zh-CN": "延迟色块分级模式"
         },
         "options": "固定,均值偏移",
-        "default": "固定",
+        "default": "均值偏移",
         "help": {
           "en": "Fixed threshold or mean delta.",
           "zh-CN": "固定阈值或均值偏移。"

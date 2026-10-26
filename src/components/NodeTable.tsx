@@ -17,6 +17,7 @@ import { translations, Lang, formatMsg } from "../lib/i18n";
 import {
   formatKbps,
   formatNodeTraffic,
+  formatUptime,
   getTrafficTypeShortLabel,
   type TrafficLimitType,
 } from "@/lib/formatUnits";
@@ -101,6 +102,44 @@ const renderTrafficValue = (node: VPSNode) => (
     )}
   </span>
 );
+
+function NodeUptime({
+  node,
+  lang,
+  className,
+}: {
+  node: VPSNode;
+  lang: Lang;
+  className?: string;
+}) {
+  const t = translations[lang];
+  const labels = {
+    day: t.unitDay,
+    hour: t.unitHour,
+    minute: t.unitMin,
+    second: t.unitSec,
+  };
+  const hasUptime = node.status === "online" && node.uptimeSec > 0;
+  return (
+    <span
+      className={className}
+      title={
+        hasUptime
+          ? `${t.lblUptimeSec} ${formatUptime(node.uptimeSec, labels)}`
+          : undefined
+      }
+    >
+      {hasUptime
+        ? formatUptime(
+            node.uptimeSec,
+            { ...labels, hour: t.unitHourShort },
+            "compact",
+          )
+        : "—"}
+    </span>
+  );
+}
+
 const NodeListRow = React.memo(function NodeListRow({
   node,
   lang,
@@ -198,15 +237,21 @@ const NodeListRow = React.memo(function NodeListRow({
       <td
         className={`py-3 px-2 ${textMuted} ${zenType.data} whitespace-nowrap`}
       >
-        {(() => {
-          const osDetails = getOSDetails(node.os, node.arch);
-          return (
-            <span className="flex items-center gap-2 inline-flex">
-              <OsIcon os={node.os} />
-              <span>{osDetails.text}</span>
-            </span>
-          );
-        })()}
+        <div className="flex flex-col gap-1">
+          {(() => {
+            const osDetails = getOSDetails(node.os, node.arch);
+            return (
+              <span className="flex items-center gap-2 inline-flex">
+                <OsIcon os={node.os} />
+                <span>{osDetails.text}</span>
+              </span>
+            );
+          })()}
+          <span className={`${zenType.caption} ${zenText.subtle} normal-case`}>
+            {t.uptime}:{" "}
+            <NodeUptime node={node} lang={lang} />
+          </span>
+        </div>
       </td>
 
       {/* CPU Live Load */}
@@ -414,6 +459,14 @@ const NodeCard = React.memo(function NodeCard({
               );
             })()}
           </span>
+        </div>
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="shrink-0">{t.uptime}:</span>
+          <NodeUptime
+            node={node}
+            lang={lang}
+            className={`min-w-0 text-right font-bold tabular-nums ${textPrimary}`}
+          />
         </div>
         <div className="flex justify-between">
           <span>{t.cpu}:</span>

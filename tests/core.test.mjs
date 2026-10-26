@@ -463,38 +463,36 @@ test("numeric helpers reject invalid telemetry and clamp percentages", () => {
 });
 
 test("custom themes keep text readable across mixed light and dark surfaces", () => {
-  const defaults = colorScheme.resolveColorScheme({
-    presetId: "Warm",
-    mode: "light",
-  });
-  assert.equal(defaults["--zen-fg-subtle"], "#5f5f58");
-  for (const key of [
-    "--zen-fg",
-    "--zen-fg-strong",
-    "--zen-fg-muted",
-    "--zen-fg-subtle",
-    "--zen-fg-faint",
-    "--zen-accent",
-    "--zen-accent-muted",
-    "--zen-success",
-    "--zen-warning",
-    "--zen-danger",
-  ]) {
-    assert.ok(hexContrast(defaults[key], "#dad8ca") >= 4.48);
-    assert.ok(hexContrast(defaults[key], "#e7e5da") >= 4.48);
-  }
-  for (const key of [
-    "--zen-chart-cpu",
-    "--zen-chart-mem",
-    "--zen-chart-swap",
-    "--zen-chart-load",
-    "--zen-chart-net-in",
-    "--zen-chart-net-out",
-    "--zen-chart-tcp",
-    "--zen-chart-udp",
-  ]) {
-    assert.ok(hexContrast(defaults[key], "#dad8ca") >= 2.98);
-    assert.ok(hexContrast(defaults[key], "#e7e5da") >= 2.98);
+  for (const mode of ["light", "dark"]) {
+    const defaults = colorScheme.resolveColorScheme({ presetId: "Warm", mode });
+    for (const key of [
+      "--zen-fg",
+      "--zen-fg-strong",
+      "--zen-fg-muted",
+      "--zen-fg-subtle",
+      "--zen-fg-faint",
+      "--zen-accent",
+      "--zen-accent-muted",
+      "--zen-success",
+      "--zen-warning",
+      "--zen-danger",
+    ]) {
+      assert.ok(hexContrast(defaults[key], defaults["--zen-bg"]) >= 4.48);
+      assert.ok(hexContrast(defaults[key], defaults["--zen-surface"]) >= 4.48);
+    }
+    for (const key of [
+      "--zen-chart-cpu",
+      "--zen-chart-mem",
+      "--zen-chart-swap",
+      "--zen-chart-load",
+      "--zen-chart-net-in",
+      "--zen-chart-net-out",
+      "--zen-chart-tcp",
+      "--zen-chart-udp",
+    ]) {
+      assert.ok(hexContrast(defaults[key], defaults["--zen-bg"]) >= 2.98);
+      assert.ok(hexContrast(defaults[key], defaults["--zen-surface"]) >= 2.98);
+    }
   }
 
   const custom = colorScheme.resolveColorScheme({

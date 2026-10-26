@@ -6,7 +6,7 @@
 
 ## 预览
 
-演示站：https://tz.kkkk.li
+演示站：https://komari.qwerxyz.com/
 
 ## 安装与配置
 

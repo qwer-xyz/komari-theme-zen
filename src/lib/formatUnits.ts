@@ -201,12 +201,19 @@ export type UptimeLabels = {
 export function formatUptime(
   seconds: number,
   labels: UptimeLabels,
+  format: "full" | "compact" = "full",
 ): string {
-  if (!seconds || seconds <= 0) return "—";
+  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
+  if (format === "compact") {
+    if (d) return `${d} ${labels.day} ${h} ${labels.hour}`;
+    if (h) return `${h} ${labels.hour} ${m} ${labels.minute}`;
+    if (m) return `${m} ${labels.minute} ${s} ${labels.second}`;
+    return `${s} ${labels.second}`;
+  }
   const parts: string[] = [];
   if (d) parts.push(`${d} ${labels.day}`);
   if (h) parts.push(`${h} ${labels.hour}`);

@@ -30,7 +30,7 @@ export type LatencyColorConfig = {
 };
 
 export const DEFAULT_LATENCY_COLOR_CONFIG: LatencyColorConfig = {
-  mode: "Fixed",
+  mode: "MeanDelta",
   fixedGreenMax: 100,
   fixedYellowMax: 150,
   meanGreenDelta: 10,
@@ -184,9 +184,9 @@ export function mergeLatencyHistory(
 }
 
 export function parseLatencyColorMode(raw: unknown): LatencyColorMode {
-  return parseThemeSelectOption(raw, "Fixed") === "MeanDelta"
-    ? "MeanDelta"
-    : "Fixed";
+  return parseThemeSelectOption(raw, DEFAULT_LATENCY_COLOR_CONFIG.mode) === "Fixed"
+    ? "Fixed"
+    : "MeanDelta";
 }
 
 export function parseThemeNumber(raw: unknown, fallback: number): number {

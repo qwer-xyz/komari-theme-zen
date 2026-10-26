@@ -16,6 +16,7 @@ export type Messages = {
   status: string;
   name: string;
   os: string;
+  uptime: string;
   cpu: string;
   mem: string;
   disk: string;
@@ -93,6 +94,7 @@ export type Messages = {
   setSortDescending: string;
   timeNow: string;
   unitHour: string;
+  unitHourShort: string;
   unitMin: string;
   unitDay: string;
   unitSec: string;
