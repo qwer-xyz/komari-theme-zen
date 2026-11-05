@@ -1171,7 +1171,7 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
   const hasHeaderMeta = groupName.length > 0 || hasTags;
   const showSepAfterGroup = groupName && hasTags;
   const expiryLabel = (() => {
-    if (!hasExpiry || !expiryState) return t.billingNotSet;
+    if (!hasExpiry || !expiryState) return t.billingNoInfo;
     if (expiryState.kind === "long_term") return t.billingLongTerm;
     if (expiryState.kind === "expired") return t.billingExpired;
     return formatUpdatedAt(node.expiredAt);

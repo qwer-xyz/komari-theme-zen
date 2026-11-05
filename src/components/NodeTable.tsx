@@ -994,9 +994,6 @@ export function NodeTable({
         suffixText = trailingPrice;
       } else if (billing.expiryKind === "long_term") {
         mainText = plainPricePart ?? billingLabels.billingHidden;
-      } else if (billing.expiryKind === "none" && pricePart) {
-        mainText = billingLabels.billingNotSet;
-        suffixText = pricePart;
       }
 
       return (
