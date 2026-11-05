@@ -163,13 +163,12 @@ function LoadMeter({
   hint?: string;
   /** Keep the reading next to the label instead of the far edge. */
   valueInline?: boolean;
-  /** fill = colored bar, empty = grey track, none = no bar. */
-  track?: "fill" | "empty" | "none";
+  /** fill draws a thin bar; none is text only. */
+  track?: "fill" | "none";
 }) {
   const width = Math.min(100, Math.max(0, percent ?? 0));
-  const showFill = track === "fill" && percent != null && color;
   return (
-    <div className="space-y-1.5">
+    <div className={track === "none" ? "" : "space-y-1.5"}>
       <div
         className={`flex items-baseline gap-2 ${
           valueInline ? "" : "justify-between"
@@ -193,7 +192,7 @@ function LoadMeter({
       </div>
       {track === "none" ? null : (
         <div className="h-1 w-full overflow-hidden rounded-full bg-zen-fill-muted/35">
-          {showFill ? (
+          {percent != null && color ? (
             <div
               className="h-full rounded-full"
               style={{ width: `${width}%`, backgroundColor: color }}
@@ -1424,7 +1423,7 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                       value={node.loadAvg || "—"}
                       hint={t.loadAvgHint}
                       valueInline
-                      track="empty"
+                      track="none"
                     />
                   </div>
                   <div className="py-2.5">
@@ -1439,13 +1438,7 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                     <LoadMeter
                       label="SWAP"
                       value={formatStoragePair(node.swapUsed, node.swapTotal)}
-                      percent={
-                        node.swapTotal > 0
-                          ? safePercent(node.swapUsed, node.swapTotal)
-                          : null
-                      }
-                      color="var(--zen-series-swap)"
-                      track={node.swapTotal > 0 ? "fill" : "none"}
+                      track="none"
                     />
                   </div>
                   <div className="py-2.5">

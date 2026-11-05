@@ -21,7 +21,7 @@ import {
 import { formatMsg, translations, type Lang } from "@/lib/i18n";
 import { formatChartPointTime } from "@/lib/timeRangePresets";
 import { taskColor, taskPingVolatility } from "@/lib/recordTransform";
-import { zenType } from "@/lib/typography";
+import { zenType, zenTouch } from "@/lib/typography";
 import { zenPopover, zenText } from "@/lib/zenSemantics";
 import { PingChartOverview } from "@/components/detail/PingChartOverview";
 import type { PingRecord, PingTaskInfo } from "@/types/records";
@@ -770,7 +770,13 @@ export function LatencyProbePanel({
               keyboardHelp={t.pingOverviewKeyboardHelp}
             />
 
-            <div className="grid grid-cols-1 gap-y-2 pt-1 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2 pt-1 select-none">
+              <div
+                className={`${zenType.label} zen-track-tight uppercase font-bold font-mono ${zenText.subtle}`}
+              >
+                {t.pingProbeFilter}
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 sm:gap-x-6 gap-y-2.5 pt-1.5 font-mono">
                 {tasks.map((task) => {
                   const id = String(task.id);
                   const color = colors[id];
@@ -780,8 +786,8 @@ export function LatencyProbePanel({
                   const avg = task.avg ?? task.latest ?? 0;
                   const lossVal = task.loss ?? 0;
                   const volatility = volatilityByTask[id];
-                  const msText = `${avg >= 100 ? avg.toFixed(0) : avg.toFixed(1)} ms`;
-                  const metricsTitle = `${msText} · ${lossVal.toFixed(1)}%${
+
+                  const metricsTitle = `${avg >= 100 ? avg.toFixed(0) : avg.toFixed(1)}ms · ${lossVal.toFixed(1)}%${
                     volatility !== null ? ` · ${volatility.toFixed(2)}` : ""
                   }`;
 
@@ -792,25 +798,43 @@ export function LatencyProbePanel({
                       onClick={() => onToggleProbe(id)}
                       aria-pressed={isSelected}
                       title={`${task.name} — ${metricsTitle}`}
-                      className={`flex min-w-0 items-center gap-2 py-0.5 text-left text-sm cursor-pointer ${
-                        isChartActive
-                          ? "text-zen-fg-strong"
-                          : "text-zen-fg-faint"
-                      }`}
+                      className={`flex items-center gap-1.5 min-w-0 w-full ${zenTouch.btn} transition-all duration-200 cursor-pointer rounded-md border px-2 py-1 ${
+                        isSelected
+                          ? "text-zen-accent font-extrabold border-zen-accent/55 bg-zen-accent/12 dark:bg-zen-accent/18 shadow-[0_1px_0_rgba(0,0,0,0.04)]"
+                          : isChartActive
+                            ? `${zenText.primary} border-zen-border bg-zen-surface/55 hover:border-zen-accent/45 hover:bg-zen-fill-muted/10`
+                            : `${zenText.muted} border-zen-border-muted bg-transparent hover:border-zen-accent/35 hover:text-zen-fg-strong hover:bg-zen-fill-muted/8`
+                      } ${zenType.caption}`}
                     >
                       <span
-                        className="h-2 w-2 shrink-0 rounded-full"
+                        className={`rounded-full shrink-0 transition-all duration-200 ${
+                          isSelected
+                            ? "w-1.5 h-1.5 ring-2 ring-zen-accent/40"
+                            : "w-1 h-1"
+                        }`}
                         style={{ backgroundColor: color }}
                       />
-                      <span className="min-w-0 flex-1 truncate font-medium">
+                      <span
+                        className={`shrink-0 whitespace-nowrap text-left font-sans ${zenType.caption} ${
+                          isSelected ? "font-bold" : "font-medium"
+                        }`}
+                      >
                         {task.name}
                       </span>
-                      <span className="shrink-0 tabular-nums">
-                        <span className="font-semibold">{msText}</span>
+                      <span
+                        className={`min-w-0 flex-1 truncate text-right font-mono tabular-nums ${
+                          isSelected
+                            ? "font-extrabold"
+                            : isChartActive
+                              ? "font-bold"
+                              : ""
+                        }`}
+                      >
+                        <span>
+                          {avg >= 100 ? avg.toFixed(0) : avg.toFixed(1)}ms
+                        </span>
                         <span
-                          className={
-                            lossVal > 0 ? "text-zen-warning" : "text-zen-fg-muted"
-                          }
+                          className={`${lossVal > 0 ? "text-zen-warning" : zenText.subtle}`}
                         >
                           {" · "}
                           {lossVal.toFixed(1)}%
@@ -820,7 +844,7 @@ export function LatencyProbePanel({
                             className={
                               volatility > 0.3
                                 ? "text-zen-warning"
-                                : "text-zen-fg-muted"
+                                : zenText.subtle
                             }
                             title={t.pingVolatility}
                           >
@@ -837,11 +861,12 @@ export function LatencyProbePanel({
                 <button
                   type="button"
                   onClick={() => onToggleProbe("CLEAR_ALL")}
-                  className="cursor-pointer text-sm text-zen-fg-muted underline-offset-2 hover:text-zen-accent hover:underline"
+                  className={`font-bold tracking-wider underline cursor-pointer hover:text-zen-accent transition-colors uppercase ${zenType.label}`}
                 >
                   {t.pingShowAll}
                 </button>
               )}
+            </div>
           </>
         ) : isLoading ? (
           <div className="space-y-4 pt-1" aria-hidden>
