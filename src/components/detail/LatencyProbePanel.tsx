@@ -776,12 +776,12 @@ export function LatencyProbePanel({
                       onClick={() => onToggleProbe(id)}
                       aria-pressed={isSelected}
                       title={`${task.name} — ${metricsTitle}`}
-                      className={`flex items-center gap-1.5 min-w-0 w-full ${zenTouch.btn} transition-all duration-200 cursor-pointer rounded-md ${
+                      className={`flex items-center gap-1.5 min-w-0 w-full ${zenTouch.btn} transition-all duration-200 cursor-pointer rounded-md border px-2 py-1 ${
                         isSelected
-                          ? "text-zen-accent font-extrabold border border-zen-accent/55 bg-zen-accent/12 dark:bg-zen-accent/18 px-2 py-1 shadow-[0_1px_0_rgba(0,0,0,0.04)]"
+                          ? "text-zen-accent font-extrabold border-zen-accent/55 bg-zen-accent/12 dark:bg-zen-accent/18 shadow-[0_1px_0_rgba(0,0,0,0.04)]"
                           : isChartActive
-                            ? `${zenText.primary} bg-transparent px-1 hover:bg-zen-fill-muted/8`
-                            : `${zenText.muted} px-1 hover:text-zen-fg-strong hover:bg-zen-fill-muted/8`
+                            ? `${zenText.primary} border-zen-border bg-zen-surface/55 hover:border-zen-accent/45 hover:bg-zen-fill-muted/10`
+                            : `${zenText.muted} border-zen-border-muted bg-transparent hover:border-zen-accent/35 hover:text-zen-fg-strong hover:bg-zen-fill-muted/8`
                       } ${zenType.caption}`}
                     >
                       <span

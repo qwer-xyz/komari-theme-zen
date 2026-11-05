@@ -101,6 +101,7 @@ export default defineConfig(({ mode }) => {
     const apiOrigin = apiTarget
       ? new URL(apiTarget).origin
       : "http://127.0.0.1:25774";
+    const apiSecure = process.env.VITE_API_INSECURE !== "true";
 
     config.server = {
       ...config.server,
@@ -108,6 +109,7 @@ export default defineConfig(({ mode }) => {
         "/api": {
           target: apiTarget || "http://127.0.0.1:25774",
           changeOrigin: true,
+          secure: apiSecure,
           headers: { origin: apiOrigin },
           rewriteWsOrigin: true,
           ws: true,
@@ -115,6 +117,7 @@ export default defineConfig(({ mode }) => {
         "/themes": {
           target: apiTarget || "http://127.0.0.1:25774",
           changeOrigin: true,
+          secure: apiSecure,
           headers: { origin: apiOrigin },
         },
       },
