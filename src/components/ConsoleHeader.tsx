@@ -14,7 +14,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Link } from "react-router-dom";
-import { Settings, Globe, Clock, Sun, Moon } from "lucide-react";
+import { Settings, Globe, Sun, Moon } from "lucide-react";
 import { LanguageMenu } from "@/components/LanguageMenu";
 import { VPSNode } from "../types";
 import { translations, Lang } from "../lib/i18n";
@@ -307,7 +307,6 @@ function LocalClock({
   textMuted,
   textPrimary,
   compact = false,
-  inline = false,
   className = "",
 }: {
   label: string;
@@ -315,7 +314,6 @@ function LocalClock({
   textMuted: string;
   textPrimary: string;
   compact?: boolean;
-  inline?: boolean;
   className?: string;
 }) {
   const now = useSyncExternalStore(
@@ -346,26 +344,6 @@ function LocalClock({
         : "",
     [compact, now],
   );
-
-  if (inline) {
-    const d = now ? new Date(now) : null;
-    const p = (n: number) => String(n).padStart(2, "0");
-    const stamp = d
-      ? `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
-      : loadingLabel;
-    return (
-      <div className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm ${className}`}>
-        <Clock
-          size={15}
-          strokeWidth={1.75}
-          className="shrink-0 text-zen-fg-muted"
-          aria-hidden
-        />
-        <span className={`tabular-nums font-medium ${textPrimary}`}>{stamp}</span>
-        {timeZone ? <span className={textMuted}>{timeZone}</span> : null}
-      </div>
-    );
-  }
 
   return (
     <div className={className}>
@@ -659,10 +637,7 @@ export function ConsoleHeader({
   const textUnit = zenText.secondary;
   const btnHoverColor = "hover:text-zen-accent";
 
-  const siteTitleClass =
-    view === "detail"
-      ? `text-[17px] font-semibold tracking-tight normal-case ${textPrimary} select-none break-words`
-      : `text-3xl font-black tracking-tight normal-case ${textPrimary} select-none break-words`;
+  const siteTitleClass = `text-3xl font-black tracking-tight normal-case ${textPrimary} select-none break-words`;
   const renderSiteTitle = () => (
     <Link
       to="/"
@@ -749,63 +724,9 @@ export function ConsoleHeader({
   );
 
   return (
-    <header
-      className={`km-navbar font-sans ${zenType.body} select-none ${
-        view === "detail" ? "normal-case" : "uppercase"
-      }`}
-    >
+    <header className={`km-navbar font-sans ${zenType.body} uppercase select-none`}>
       {/* 1. Responsive Top Bar with absolute vertical alignment (items-center) */}
-      <div
-        className={
-          view === "detail" ? "pb-3 md:pb-4" : "pb-5 md:pb-6"
-        }
-      >
-        {view === "detail" ? (
-          <>
-            <div className="md:hidden">
-              <div className="flex items-center justify-between gap-3">
-                <h1 className={`min-w-0 ${siteTitleClass}`}>
-                  {renderSiteTitle()}
-                </h1>
-                <div className="shrink-0">{headerControls(true)}</div>
-              </div>
-              <LocalClock
-                label={t.localTime}
-                loadingLabel={t.loading}
-                textMuted={textMuted}
-                textPrimary={textPrimary}
-                inline
-                className="mt-1.5"
-              />
-            </div>
-            <div className="hidden items-center gap-6 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-              <div className="flex min-w-0 items-baseline gap-3">
-                <h1 className={`shrink-0 ${siteTitleClass}`}>
-                  {renderSiteTitle()}
-                </h1>
-                {siteDescription ? (
-                  <p
-                    className="min-w-0 truncate text-sm font-normal normal-case text-zen-fg-muted"
-                    title={siteDescription}
-                  >
-                    {siteDescription}
-                  </p>
-                ) : null}
-              </div>
-              <LocalClock
-                label={t.localTime}
-                loadingLabel={t.loading}
-                textMuted={textMuted}
-                textPrimary={textPrimary}
-                inline
-                className="justify-center"
-              />
-              <div className="flex justify-end">{headerControls()}</div>
-            </div>
-          </>
-        ) : null}
-        {view !== "detail" ? (
-          <>
+      <div className="pb-5 md:pb-6">
         <div className="md:hidden space-y-1">
           <h1 className={siteTitleClass}>{renderSiteTitle()}</h1>
           {siteDescription ? (
@@ -856,8 +777,6 @@ export function ConsoleHeader({
           {/* Right: Modern Menu Controls (with localized Dark/Light options) */}
           <div className="flex justify-end">{headerControls()}</div>
         </div>
-          </>
-        ) : null}
       </div>
 
       {/* 2. RESTRUCTURED HIGH-DENSITY BALANCED TELEMETRY CHANNELS */}
