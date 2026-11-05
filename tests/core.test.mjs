@@ -31,6 +31,7 @@ const gpuSampler = await vite.ssrLoadModule("/src/lib/sampleGpuRecords.ts");
 const liveGpu = await vite.ssrLoadModule("/src/lib/liveGpu.ts");
 const residual = await vite.ssrLoadModule("/src/lib/residualValue.ts");
 const billingDisplay = await vite.ssrLoadModule("/src/lib/billingDisplay.ts");
+const timeRangePresets = await vite.ssrLoadModule("/src/lib/timeRangePresets.ts");
 
 const billingLabels = {
   unitDays: "天",
@@ -1004,4 +1005,17 @@ test("RPC HTTP timeout remains active while the response body is read", async ()
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("detail history chips keep 6/12/18/24h and longer presets", () => {
+  assert.deepEqual(timeRangePresets.detailHistoryHours(24, [6, 12, 18, 24]), [
+    6, 12, 18, 24,
+  ]);
+  assert.deepEqual(timeRangePresets.detailHistoryHours(18, []), [6, 12, 18]);
+  assert.deepEqual(
+    timeRangePresets.detailHistoryHours(24 * 30, [24, 168, 720]),
+    [6, 12, 18, 24, 168, 720],
+  );
+  assert.deepEqual(timeRangePresets.detailHistoryHours(3, []), [3]);
+  assert.deepEqual(timeRangePresets.detailHistoryHours(0, [6]), []);
 });

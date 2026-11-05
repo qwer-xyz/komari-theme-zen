@@ -1,15 +1,19 @@
 /** @license SPDX-License-Identifier: MIT */
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Globe } from "lucide-react";
 import { LANG_MENU_OPTIONS, type Lang } from "@/lib/i18n";
 import { zenMotion } from "@/lib/zenMotion";
 
 export function LanguageMenu({
   lang,
   onChange,
+  tone = "default",
+  compact = false,
 }: {
   lang: Lang;
   onChange: (lang: Lang) => void;
+  tone?: "default" | "detail";
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -62,16 +66,27 @@ export function LanguageMenu({
             setOpen(true);
           }
         }}
-        className={`inline-flex min-h-10 max-w-[12rem] items-center gap-2 rounded-md px-2.5 font-bold text-zen-fg-strong transition-colors hover:bg-zen-elevate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zen-accent ${open ? "bg-zen-elevate text-zen-accent" : ""}`}
+        className={
+          tone === "detail"
+            ? `inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-zen-fg-strong transition-colors hover:text-zen-accent ${open ? "text-zen-accent" : ""}`
+            : `inline-flex min-h-10 max-w-[12rem] items-center gap-2 rounded-md px-2.5 font-bold text-zen-fg-strong transition-colors hover:bg-zen-elevate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zen-accent ${open ? "bg-zen-elevate text-zen-accent" : ""}`
+        }
       >
-        <span className="truncate">
-          {LANG_MENU_OPTIONS[selected]?.label[lang]}
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          size={13}
-          className={`shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
-        />
+        {tone === "detail" ? (
+          <Globe aria-hidden size={16} strokeWidth={1.75} className="shrink-0" />
+        ) : null}
+        {compact ? null : (
+          <span className="truncate">
+            {LANG_MENU_OPTIONS[selected]?.label[lang]}
+          </span>
+        )}
+        {compact ? null : (
+          <ChevronDown
+            aria-hidden="true"
+            size={13}
+            className={`shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
+          />
+        )}
       </button>
       {open ? (
         <div
