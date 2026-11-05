@@ -566,7 +566,7 @@ export function LatencyProbePanel({
               strokeWidth={1.75}
               aria-hidden
             />
-            <h3 className="text-[15px] font-semibold text-zen-fg-strong">
+            <h3 className="text-sm font-semibold leading-none text-zen-fg-strong">
               {chartTitle}
             </h3>
           </div>

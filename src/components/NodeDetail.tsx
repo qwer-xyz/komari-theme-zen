@@ -136,9 +136,11 @@ function SpecRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-1.5">
-      <span className="max-w-[46%] text-zen-fg-muted">{label}</span>
-      <span className="min-w-0 flex-1 break-words text-right font-medium text-zen-fg-strong">
+    <div className="flex items-start justify-between gap-3 py-[3px]">
+      <span className="max-w-[46%] shrink-0 pt-px text-[13px] leading-5 text-zen-fg-muted">
+        {label}
+      </span>
+      <span className="min-w-0 flex-1 break-words text-right text-[13px] font-medium leading-5 text-zen-fg-strong">
         {children}
       </span>
     </div>
@@ -161,9 +163,9 @@ function LoadMeter({
   const showBar = percent != null && color;
   const width = Math.min(100, Math.max(0, percent ?? 0));
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="inline-flex min-w-0 items-center gap-1 text-zen-fg-muted">
+        <span className="inline-flex min-w-0 items-center gap-1 text-[13px] text-zen-fg-muted">
           <span className="truncate">{label}</span>
           {hint ? (
             <span title={hint} className="inline-flex shrink-0">
@@ -175,12 +177,12 @@ function LoadMeter({
             </span>
           ) : null}
         </span>
-        <span className="shrink-0 text-right font-semibold tabular-nums text-zen-fg-strong">
+        <span className="shrink-0 text-right text-[13px] font-semibold tabular-nums text-zen-fg-strong">
           {value}
         </span>
       </div>
       {showBar ? (
-        <div className="h-[3px] w-full overflow-hidden rounded-full bg-zen-fill-muted/40">
+        <div className="h-1 w-full overflow-hidden rounded-full bg-zen-fill-muted/30">
           <div
             className="h-full rounded-full"
             style={{ width: `${width}%`, backgroundColor: color }}
@@ -202,7 +204,7 @@ function MeterPair({
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-zen-fg-muted">
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-zen-fg-muted">
         {dot ? (
           <span
             className="h-1.5 w-1.5 shrink-0 rounded-full"
@@ -211,7 +213,7 @@ function MeterPair({
         ) : null}
         <span className="truncate">{label}</span>
       </span>
-      <span className="shrink-0 font-semibold tabular-nums text-zen-fg-strong">
+      <span className="shrink-0 text-[13px] font-semibold tabular-nums text-zen-fg-strong">
         {value}
       </span>
     </div>
@@ -350,9 +352,11 @@ function niceCeil(value: number): number {
 }
 
 const detailCardClass =
-  "rounded-2xl border border-zen-card-line bg-zen-card px-4 py-4 sm:px-5 sm:py-5";
+  "rounded-2xl border border-zen-card-line bg-zen-card px-4 py-3.5 sm:px-5 sm:py-4";
 const chartCardClass =
   "rounded-2xl border border-zen-card-line bg-zen-card px-3.5 py-3 sm:px-4 sm:py-3.5";
+const detailTitleClass =
+  "text-sm font-semibold leading-none text-zen-fg-strong";
 
 const MiniLineChart = ({
   data,
@@ -1235,47 +1239,49 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
 
   const hardwareCard = (
     <section className={`${detailCardClass} h-full`}>
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2.5 flex items-center gap-2">
         <Cpu className="h-4 w-4 text-zen-fg-muted" strokeWidth={1.75} />
-        <h3 className="text-[15px] font-semibold text-zen-fg-strong">
-          {t.hardwareSpec}
-        </h3>
+        <h3 className={detailTitleClass}>{t.hardwareSpec}</h3>
       </div>
-      <div className="text-sm">
-        <SpecRow label={t.lblCpuVendor}>{specText(node.cpuVendor)}</SpecRow>
-        <SpecRow label={t.lblCpuCores}>
-          {node.cpuCores} {t.lblCpuThreads}
-        </SpecRow>
-        <SpecRow label={t.lblArch}>{specText(node.arch)}</SpecRow>
-        <SpecRow label={t.lblSystemOs}>
-          <span className="inline-flex max-w-full items-center justify-end gap-1.5">
-            <OsIcon os={node.os} />
-            <span className="min-w-0 break-words">{specText(node.os)}</span>
-          </span>
-        </SpecRow>
-        <SpecRow label={t.lblKernel}>{specText(node.kernelVersion)}</SpecRow>
-        <SpecRow label={t.lblVirtualization}>
-          {specText(node.virtualization)}
-        </SpecRow>
-        <SpecRow label={t.lblGpu}>{specText(node.gpuName)}</SpecRow>
-        <SpecRow label={t.lblUptimeSec}>{uptimeText}</SpecRow>
-      </div>
-      <div className="mt-2 border-t border-zen-card-line pt-2 text-sm">
-        <SpecRow label={t.lblKomariVersion}>
-          {hasClientVersion ? node.clientVersion.trim() : "—"}
-        </SpecRow>
-        <SpecRow label={t.lblBootTime}>{bootText}</SpecRow>
-        <SpecRow label={t.lblLastUpdated}>
-          {formatUpdatedAt(node.updatedAt)}
-        </SpecRow>
-        {hasExpiry ? (
-          <SpecRow label={t.lblExpiredAt}>
-            <span className={expiryValueClass}>{expiryLabel}</span>
+      <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2 lg:items-start">
+        <div>
+          <SpecRow label={t.lblCpuVendor}>{specText(node.cpuVendor)}</SpecRow>
+          <SpecRow label={t.lblCpuCores}>
+            {node.cpuCores} {t.lblCpuThreads}
           </SpecRow>
-        ) : null}
-        {priceText ? (
-          <SpecRow label={t.lblRenewalPrice}>{priceText}</SpecRow>
-        ) : null}
+          <SpecRow label={t.lblArch}>{specText(node.arch)}</SpecRow>
+          <SpecRow label={t.lblSystemOs}>
+            <span className="inline-flex max-w-full items-center justify-end gap-1.5">
+              <OsIcon os={node.os} />
+              <span className="min-w-0 break-words text-left">
+                {specText(node.os)}
+              </span>
+            </span>
+          </SpecRow>
+          <SpecRow label={t.lblKernel}>{specText(node.kernelVersion)}</SpecRow>
+          <SpecRow label={t.lblVirtualization}>
+            {specText(node.virtualization)}
+          </SpecRow>
+          <SpecRow label={t.lblGpu}>{specText(node.gpuName)}</SpecRow>
+          <SpecRow label={t.lblUptimeSec}>{uptimeText}</SpecRow>
+        </div>
+        <div className="mt-2 border-t border-zen-card-line pt-2 lg:mt-0 lg:border-t-0 lg:pt-0">
+          <SpecRow label={t.lblKomariVersion}>
+            {hasClientVersion ? node.clientVersion.trim() : "—"}
+          </SpecRow>
+          <SpecRow label={t.lblBootTime}>{bootText}</SpecRow>
+          <SpecRow label={t.lblLastUpdated}>
+            {formatUpdatedAt(node.updatedAt)}
+          </SpecRow>
+          {hasExpiry ? (
+            <SpecRow label={t.lblExpiredAt}>
+              <span className={expiryValueClass}>{expiryLabel}</span>
+            </SpecRow>
+          ) : null}
+          {priceText ? (
+            <SpecRow label={t.lblRenewalPrice}>{priceText}</SpecRow>
+          ) : null}
+        </div>
       </div>
     </section>
   );
@@ -1371,7 +1377,7 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
 
       {node.online ? (
         <>
-          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
             <DetailSection delay={60} className="h-full">
               {hardwareCard}
             </DetailSection>
@@ -1382,11 +1388,9 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                     className="h-4 w-4 text-zen-fg-muted"
                     strokeWidth={1.75}
                   />
-                  <h3 className="text-[15px] font-semibold text-zen-fg-strong">
-                    {t.capacityLoads}
-                  </h3>
+                  <h3 className={detailTitleClass}>{t.capacityLoads}</h3>
                 </div>
-                <div className="space-y-3.5">
+                <div className="space-y-3">
                   <LoadMeter
                     label={t.lblCpuLoadUtil}
                     value={formatPercent(node.cpuUsage)}
@@ -1418,50 +1422,53 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                   />
                   <div className="pt-1">
                     <div className="mb-2 flex items-baseline justify-between gap-3">
-                      <span className="text-zen-fg-muted">{networkHeading}</span>
+                      <span className="text-[13px] text-zen-fg-muted">
+                        {networkHeading}
+                      </span>
                       <span className="text-xs font-medium tracking-wide text-zen-fg-subtle">
                         RX/TX
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 gap-y-2 min-[420px]:grid-cols-2 min-[420px]:gap-x-5">
-                      <div className="space-y-2">
-                        <MeterPair
-                          dot="var(--zen-series-net-in)"
-                          label={t.lblInboundRxShort}
-                          value={formatSpeed(node.netSpeedIn)}
-                        />
-                        <MeterPair
-                          dot="var(--zen-series-net-out)"
-                          label={t.lblOutboundTxShort}
-                          value={formatSpeed(node.netSpeedOut)}
-                        />
-                      </div>
-                      <div className="space-y-2 min-[420px]:border-l min-[420px]:border-zen-card-line min-[420px]:pl-5">
-                        <MeterPair
-                          label={t.lblDownloaded}
-                          value={formatTrafficGb(node.bandwidthUsedIn)}
-                        />
-                        <MeterPair
-                          label={t.lblUploaded}
-                          value={formatTrafficGb(node.bandwidthUsedOut)}
-                        />
-                      </div>
+                    <div className="grid grid-cols-1 gap-y-1.5 min-[420px]:grid-cols-2 min-[420px]:gap-x-6">
+                      <MeterPair
+                        dot="var(--zen-series-net-in)"
+                        label={t.lblInboundRxShort}
+                        value={formatSpeed(node.netSpeedIn)}
+                      />
+                      <MeterPair
+                        label={t.lblDownloaded}
+                        value={formatTrafficGb(node.bandwidthUsedIn)}
+                      />
+                      <MeterPair
+                        dot="var(--zen-series-net-out)"
+                        label={t.lblOutboundTxShort}
+                        value={formatSpeed(node.netSpeedOut)}
+                      />
+                      <MeterPair
+                        label={t.lblUploaded}
+                        value={formatTrafficGb(node.bandwidthUsedOut)}
+                      />
                     </div>
-                    <div className="mt-2 flex items-baseline justify-end gap-3 tabular-nums">
-                      {node.bandwidthTotal <= 0 ? (
-                        <span
-                          className={`inline-flex shrink-0 rounded-sm border px-1 py-px text-[10px] font-bold leading-none ${unlimitedTrafficBadgeClass}`}
-                        >
-                          <span className={unlimitedTrafficSymbolClass}>∞</span>
+                    <div className="mt-1.5 grid grid-cols-1 min-[420px]:grid-cols-2 min-[420px]:gap-x-6">
+                      <span className="hidden min-[420px]:block" />
+                      <div className="flex items-baseline justify-between gap-3 text-[13px] tabular-nums">
+                        {node.bandwidthTotal <= 0 ? (
+                          <span
+                            className={`inline-flex shrink-0 rounded-sm border px-1 py-px text-[10px] font-bold leading-none ${unlimitedTrafficBadgeClass}`}
+                          >
+                            <span className={unlimitedTrafficSymbolClass}>
+                              ∞
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-zen-fg-muted">
+                            {getTrafficTypeFullLabel(node.trafficLimitType, t)}
+                          </span>
+                        )}
+                        <span className="font-semibold text-zen-fg-strong">
+                          {formatNodeTraffic(node)}
                         </span>
-                      ) : (
-                        <span className="text-zen-fg-muted">
-                          {getTrafficTypeFullLabel(node.trafficLimitType, t)}
-                        </span>
-                      )}
-                      <span className="font-semibold text-zen-fg-strong">
-                        {formatNodeTraffic(node)}
-                      </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1476,9 +1483,7 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                   className="h-4 w-4 text-zen-fg-muted"
                   strokeWidth={1.75}
                 />
-                <h3 className="text-[15px] font-semibold text-zen-fg-strong">
-                  {t.tabMetrics}
-                </h3>
+                <h3 className={detailTitleClass}>{t.tabMetrics}</h3>
               </div>
               <DetailRangeChips
                 hours={recordEnabled ? loadHistoryHours : []}

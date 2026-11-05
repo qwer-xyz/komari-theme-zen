@@ -19,8 +19,8 @@ interface DetailRangeChipsProps {
 
 function chipClass(active: boolean) {
   return active
-    ? "rounded-full bg-zen-chip px-2.5 py-1 text-[13px] font-medium leading-none text-zen-chip-fg"
-    : "rounded-full px-2.5 py-1 text-[13px] font-medium leading-none text-zen-fg-muted hover:text-zen-fg-strong";
+    ? "rounded-full bg-zen-chip px-2.5 py-[5px] text-[13px] font-medium leading-none text-zen-chip-fg"
+    : "rounded-full px-2 py-[5px] text-[13px] font-normal leading-none text-zen-fg-muted hover:text-zen-fg-strong";
 }
 
 export function DetailRangeChips({
@@ -39,7 +39,7 @@ export function DetailRangeChips({
     <div
       role="tablist"
       aria-label={messages.historyRange}
-      className="flex max-w-full flex-wrap items-center gap-0.5"
+      className="flex max-w-full flex-wrap items-center gap-x-1 gap-y-1"
     >
       {showLive ? (
         <button
