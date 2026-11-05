@@ -152,9 +152,12 @@ export function formatNodeBilling(
 ): NodeBillingDisplay {
   const expiry = resolveExpiryState(node.expiredAt);
 
+  // Price 0 hides the price. That empty line uses the same quiet dash as an
+  // unset date, instead of the "not set" label. A priced node with a real
+  // expiry still uses the active / expired / long-term text below.
   if (node.price === 0) {
     return {
-      text: labels.billingNotSet,
+      text: labels.billingNoInfo,
       isExpired: false,
       isUrgent: false,
       expiryKind: "none",
@@ -173,9 +176,7 @@ export function formatNodeBilling(
   switch (expiry.kind) {
     case "none":
       return {
-        text: pricePart
-          ? `${labels.billingNotSet} ${pricePart}`
-          : labels.billingNotSet,
+        text: pricePart ?? labels.billingNoInfo,
         isExpired: false,
         isUrgent: false,
         expiryKind: "none",

@@ -30,6 +30,36 @@ const queue = await vite.ssrLoadModule("/src/lib/requestQueue.ts");
 const gpuSampler = await vite.ssrLoadModule("/src/lib/sampleGpuRecords.ts");
 const liveGpu = await vite.ssrLoadModule("/src/lib/liveGpu.ts");
 const residual = await vite.ssrLoadModule("/src/lib/residualValue.ts");
+const billingDisplay = await vite.ssrLoadModule("/src/lib/billingDisplay.ts");
+
+const billingLabels = {
+  unitDays: "天",
+  billingFree: "免费",
+  billingExpired: "已到期",
+  billingLongTerm: "长期",
+  billingNoInfo: "—",
+  billingHidden: "-",
+  billingNotSet: "未设置",
+  billingMonthly: "月",
+  billingQuarterly: "季",
+  billingSemiAnnual: "半年",
+  billingAnnual: "年",
+  billingBiennial: "两年",
+  billingTriennial: "三年",
+  billingQuinquennial: "五年",
+  billingOnce: "次",
+  billingCycleDays: "天",
+};
+
+function billingNode(overrides = {}) {
+  return {
+    price: 7.79,
+    currency: "$",
+    billingCycle: 30,
+    expiredAt: "",
+    ...overrides,
+  };
+}
 
 test("same-currency value survives an unavailable exchange service", async () => {
   const originalFetch = globalThis.fetch;
@@ -850,6 +880,102 @@ test("RPC HTTP rejects a response for a different request", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("unset expiry shows a price or a dash instead of the not-set label", () => {
+  for (const expiredAt of ["", "0001-01-01T00:00:00Z", undefined]) {
+    assert.equal(billingDisplay.isExpiryUnset(expiredAt), true);
+    assert.equal(billingDisplay.resolveExpiryState(expiredAt).kind, "none");
+
+    const priced = billingDisplay.formatNodeBilling(
+      billingNode({ expiredAt, price: 7.79 }),
+      billingLabels,
+    );
+    assert.equal(priced.text, "($7.79/月)");
+    assert.equal(priced.expiryKind, "none");
+    assert.equal(priced.text.includes(billingLabels.billingNotSet), false);
+
+    const free = billingDisplay.formatNodeBilling(
+      billingNode({ expiredAt, price: -1 }),
+      billingLabels,
+    );
+    assert.equal(free.text, `(${billingLabels.billingFree})`);
+    assert.equal(free.expiryKind, "none");
+
+    const empty = billingDisplay.formatNodeBilling(
+      billingNode({ expiredAt, price: 0 }),
+      billingLabels,
+    );
+    assert.equal(empty.text, billingLabels.billingNoInfo);
+    assert.equal(empty.expiryKind, "none");
+    assert.equal(empty.daysRemaining, -1);
+    assert.equal(empty.text.includes(billingLabels.billingNotSet), false);
+  }
+
+  const invalid = billingDisplay.formatNodeBilling(
+    billingNode({ expiredAt: "not-a-date", price: 0 }),
+    billingLabels,
+  );
+  assert.equal(billingDisplay.resolveExpiryState("not-a-date").kind, "none");
+  assert.equal(invalid.text, billingLabels.billingNoInfo);
+});
+
+test("set expiry billing text stays days, expired, or long-term", () => {
+  const activeAt = new Date(Date.now() + 10 * 86400000).toISOString();
+  const active = billingDisplay.formatNodeBilling(
+    billingNode({ expiredAt: activeAt, price: 7.79 }),
+    billingLabels,
+  );
+  assert.equal(active.expiryKind, "active");
+  assert.equal(active.isExpired, false);
+  assert.equal(
+    active.text,
+    `${active.daysRemaining} ${billingLabels.unitDays} ($7.79/月)`,
+  );
+  assert.ok(active.daysRemaining >= 9 && active.daysRemaining <= 11);
+
+  const urgent = billingDisplay.formatNodeBilling(
+    billingNode({
+      expiredAt: new Date(Date.now() + 3 * 86400000).toISOString(),
+      price: 7.79,
+    }),
+    billingLabels,
+  );
+  assert.equal(urgent.isUrgent, true);
+  assert.equal(urgent.expiryKind, "active");
+
+  const expired = billingDisplay.formatNodeBilling(
+    billingNode({
+      expiredAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+      price: 12,
+    }),
+    billingLabels,
+  );
+  assert.equal(expired.expiryKind, "expired");
+  assert.equal(expired.isExpired, true);
+  assert.equal(expired.daysRemaining, 0);
+  assert.equal(expired.text, `0 ${billingLabels.unitDays} ($12/月)`);
+
+  const longTerm = billingDisplay.formatNodeBilling(
+    billingNode({
+      expiredAt: new Date(Date.now() + 200 * 365 * 86400000).toISOString(),
+      price: 9,
+      billingCycle: 365,
+    }),
+    billingLabels,
+  );
+  assert.equal(longTerm.expiryKind, "long_term");
+  assert.equal(longTerm.text, `${billingLabels.billingLongTerm} ($9/年)`);
+  assert.equal(longTerm.isExpired, false);
+
+  const hiddenPrice = billingDisplay.formatNodeBilling(
+    billingNode({ expiredAt: activeAt, price: 0 }),
+    billingLabels,
+  );
+  assert.equal(hiddenPrice.text, billingLabels.billingNoInfo);
+  assert.equal(hiddenPrice.text.includes(billingLabels.billingNotSet), false);
+  assert.equal(hiddenPrice.expiryKind, "none");
+  assert.equal(hiddenPrice.daysRemaining, -1);
 });
 
 test("RPC HTTP timeout remains active while the response body is read", async () => {
