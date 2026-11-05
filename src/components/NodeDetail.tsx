@@ -1408,48 +1408,38 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                   />
                   <h3 className={detailTitleClass}>{t.capacityLoads}</h3>
                 </div>
-                <div className="divide-y divide-zen-card-line">
-                  <div className="pb-2.5">
-                    <LoadMeter
-                      label={t.lblCpuLoadUtil}
-                      value={formatPercent(node.cpuUsage)}
-                      percent={node.cpuUsage}
-                      color="var(--zen-series-cpu)"
-                    />
-                  </div>
-                  <div className="py-2.5">
-                    <LoadMeter
-                      label={t.lblLoadAvg}
-                      value={node.loadAvg || "—"}
-                      hint={t.loadAvgHint}
-                      valueInline
-                      track="none"
-                    />
-                  </div>
-                  <div className="py-2.5">
-                    <LoadMeter
-                      label={t.lblMemoryAllocated}
-                      value={`${formatStoragePair(node.memoryUsed, node.memoryTotal)} · ${formatPercent(memPercent)}`}
-                      percent={memPercent}
-                      color="var(--zen-series-mem)"
-                    />
-                  </div>
-                  <div className="py-2.5">
-                    <LoadMeter
-                      label="SWAP"
-                      value={formatStoragePair(node.swapUsed, node.swapTotal)}
-                      track="none"
-                    />
-                  </div>
-                  <div className="py-2.5">
-                    <LoadMeter
-                      label={t.lblDisk}
-                      value={`${formatStoragePair(node.diskUsed, node.diskTotal)} · ${formatPercent(diskPercent)}`}
-                      percent={diskPercent}
-                      color="var(--zen-series-disk)"
-                    />
-                  </div>
-                  <div className="pt-3">
+                <div className="flex flex-col gap-3.5">
+                  <LoadMeter
+                    label={t.lblCpuLoadUtil}
+                    value={formatPercent(node.cpuUsage)}
+                    percent={node.cpuUsage}
+                    color="var(--zen-series-cpu)"
+                  />
+                  <LoadMeter
+                    label={t.lblLoadAvg}
+                    value={node.loadAvg || "—"}
+                    hint={t.loadAvgHint}
+                    valueInline
+                    track="none"
+                  />
+                  <LoadMeter
+                    label={t.lblMemoryAllocated}
+                    value={`${formatStoragePair(node.memoryUsed, node.memoryTotal)} · ${formatPercent(memPercent)}`}
+                    percent={memPercent}
+                    color="var(--zen-series-mem)"
+                  />
+                  <LoadMeter
+                    label="SWAP"
+                    value={formatStoragePair(node.swapUsed, node.swapTotal)}
+                    track="none"
+                  />
+                  <LoadMeter
+                    label={t.lblDisk}
+                    value={`${formatStoragePair(node.diskUsed, node.diskTotal)} · ${formatPercent(diskPercent)}`}
+                    percent={diskPercent}
+                    color="var(--zen-series-disk)"
+                  />
+                  <div>
                     <div className="mb-2 flex items-baseline gap-2 text-[13px] text-zen-fg-muted">
                       <span>{networkHeading}</span>
                       <span className="text-xs font-medium tracking-wide text-zen-fg-subtle">
