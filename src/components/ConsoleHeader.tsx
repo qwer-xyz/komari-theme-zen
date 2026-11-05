@@ -394,10 +394,12 @@ function DetailThemeControl({
   themePreference,
   setThemePreference,
   labels,
+  showLabel = true,
 }: {
   themePreference: ThemePreference;
   setThemePreference: (theme: ThemePreference) => void;
   labels: { auto: string; light: string; dark: string };
+  showLabel?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -440,7 +442,7 @@ function DetailThemeControl({
         className="inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-zen-fg-strong hover:text-zen-accent"
       >
         <current.Icon size={16} strokeWidth={1.75} aria-hidden />
-        <span className="hidden md:inline">{current.label}</span>
+        {showLabel ? <span>{current.label}</span> : null}
       </button>
       {open ? (
         <div
@@ -720,79 +722,31 @@ export function ConsoleHeader({
     );
   };
 
-  const settingsControls = (options?: { compact?: boolean }) => {
-    const compact = options?.compact ?? false;
-    const rootClass = compact
-      ? `flex flex-col items-end gap-1.5 font-mono ${zenType.label} tracking-wide ${zenText.subtle}`
-      : `flex md:justify-end items-center gap-x-6 gap-y-3 flex-wrap font-mono ${zenType.data} tracking-widest ${zenText.subtle}`;
-
-    return (
-      <div className={rootClass}>
-        <div className="flex items-center gap-2">
-          <LanguageMenu lang={lang} onChange={setLangPreference} />
-
-          {!compact ? (
-            <span
-              className={`${zenText.faint} font-bold block select-none px-1`}
-            >
-              /
-            </span>
-          ) : null}
-        </div>
-
-        <div
-          className={`flex items-center ${compact ? "gap-1.5 justify-end flex-wrap" : "gap-3"}`}
-        >
-          <button
-            type="button"
-            onClick={() => setThemePreference("auto")}
-            aria-pressed={themePreference === "auto"}
-            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
-              themePreference === "auto"
-                ? `${textPrimary} underline underline-offset-4`
-                : zenText.subtle
-            }`}
-          >
-            {t.themeAuto}
-          </button>
-          <span className={zenText.faint} aria-hidden>
-            ·
-          </span>
-          <button
-            type="button"
-            onClick={() => setThemePreference("dark")}
-            aria-pressed={themePreference === "dark"}
-            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
-              themePreference === "dark"
-                ? `${textPrimary} underline underline-offset-4`
-                : zenText.subtle
-            }`}
-          >
-            {t.themeDark}
-          </button>
-          <span className={zenText.faint} aria-hidden>
-            ·
-          </span>
-          <button
-            type="button"
-            onClick={() => setThemePreference("light")}
-            aria-pressed={themePreference === "light"}
-            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
-              themePreference === "light"
-                ? `${textPrimary} underline underline-offset-4`
-                : zenText.subtle
-            }`}
-          >
-            {t.themeLight}
-          </button>
-          <span className={zenText.faint} aria-hidden>
-            ·
-          </span>
-          {adminEntryLink(compact ? "p-0.5" : "p-1")}
-        </div>
-      </div>
-    );
-  };
+  const headerControls = (compact = false) => (
+    <div
+      className={`flex flex-wrap items-center justify-end font-sans normal-case tracking-normal ${
+        compact ? "gap-1" : "gap-x-3 gap-y-1"
+      }`}
+    >
+      <LanguageMenu
+        lang={lang}
+        onChange={setLangPreference}
+        tone="detail"
+        compact={compact}
+      />
+      <DetailThemeControl
+        themePreference={themePreference}
+        setThemePreference={setThemePreference}
+        showLabel={!compact}
+        labels={{
+          auto: t.themeAuto,
+          light: t.themeLight,
+          dark: t.themeDark,
+        }}
+      />
+      {compact ? adminEntryLink("p-1") : adminEntryLink("", t.settingsLabel)}
+    </div>
+  );
 
   return (
     <header
@@ -813,24 +767,7 @@ export function ConsoleHeader({
                 <h1 className={`min-w-0 ${siteTitleClass}`}>
                   {renderSiteTitle()}
                 </h1>
-                <div className="flex shrink-0 items-center gap-1">
-                  <LanguageMenu
-                    lang={lang}
-                    onChange={setLangPreference}
-                    tone="detail"
-                    compact
-                  />
-                  <DetailThemeControl
-                    themePreference={themePreference}
-                    setThemePreference={setThemePreference}
-                    labels={{
-                      auto: t.themeAuto,
-                      light: t.themeLight,
-                      dark: t.themeDark,
-                    }}
-                  />
-                  {adminEntryLink("p-1")}
-                </div>
+                <div className="shrink-0">{headerControls(true)}</div>
               </div>
               <LocalClock
                 label={t.localTime}
@@ -863,23 +800,7 @@ export function ConsoleHeader({
                 inline
                 className="justify-center"
               />
-              <div className="flex items-center justify-end gap-3">
-                <LanguageMenu
-                  lang={lang}
-                  onChange={setLangPreference}
-                  tone="detail"
-                />
-                <DetailThemeControl
-                  themePreference={themePreference}
-                  setThemePreference={setThemePreference}
-                  labels={{
-                    auto: t.themeAuto,
-                    light: t.themeLight,
-                    dark: t.themeDark,
-                  }}
-                />
-                {adminEntryLink("", t.settingsLabel)}
-              </div>
+              <div className="flex justify-end">{headerControls()}</div>
             </div>
           </>
         ) : null}
@@ -905,8 +826,8 @@ export function ConsoleHeader({
             compact
             className="flex min-w-0 flex-1 flex-col text-left font-mono"
           />
-          <div className="shrink-0 pt-0.5">
-            {settingsControls({ compact: true })}
+          <div className="max-w-[68%] shrink-0 pt-0.5">
+            {headerControls()}
           </div>
         </div>
 
@@ -933,7 +854,7 @@ export function ConsoleHeader({
           />
 
           {/* Right: Modern Menu Controls (with localized Dark/Light options) */}
-          <div>{settingsControls()}</div>
+          <div className="flex justify-end">{headerControls()}</div>
         </div>
           </>
         ) : null}
