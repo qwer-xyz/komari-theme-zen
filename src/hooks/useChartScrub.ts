@@ -62,8 +62,10 @@ export function useChartScrub(
     (clientX: number) => {
       const container = containerRef.current;
       if (!container || config.dataLength === 0) return;
-      const svgEl = container.querySelector("svg");
-      if (!svgEl) return;
+      const svgEl =
+        container.querySelector("svg[data-chart-main]") ??
+        container.querySelector("svg");
+      if (!(svgEl instanceof SVGSVGElement)) return;
       const nextIndex = indexFromClientX(clientX, svgEl, config);
       setHoveredIndex((prev) => (prev === nextIndex ? prev : nextIndex));
     },

@@ -153,18 +153,28 @@ function LoadMeter({
   percent,
   color,
   hint,
+  valueInline = false,
+  track = "fill",
 }: {
   label: string;
   value: React.ReactNode;
   percent?: number | null;
   color?: string;
   hint?: string;
+  /** Keep the reading next to the label instead of the far edge. */
+  valueInline?: boolean;
+  /** fill = colored bar, empty = grey track, none = no bar. */
+  track?: "fill" | "empty" | "none";
 }) {
-  const showBar = percent != null && color;
   const width = Math.min(100, Math.max(0, percent ?? 0));
+  const showFill = track === "fill" && percent != null && color;
   return (
-    <div className="space-y-1">
-      <div className="flex items-baseline justify-between gap-3">
+    <div className="space-y-1.5">
+      <div
+        className={`flex items-baseline gap-2 ${
+          valueInline ? "" : "justify-between"
+        }`}
+      >
         <span className="inline-flex min-w-0 items-center gap-1 text-[13px] text-zen-fg-muted">
           <span className="truncate">{label}</span>
           {hint ? (
@@ -177,44 +187,52 @@ function LoadMeter({
             </span>
           ) : null}
         </span>
-        <span className="shrink-0 text-right text-[13px] font-semibold tabular-nums text-zen-fg-strong">
+        <span className="shrink-0 text-[13px] font-semibold tabular-nums text-zen-fg-strong">
           {value}
         </span>
       </div>
-      {showBar ? (
-        <div className="h-1 w-full overflow-hidden rounded-full bg-zen-fill-muted/30">
-          <div
-            className="h-full rounded-full"
-            style={{ width: `${width}%`, backgroundColor: color }}
-          />
+      {track === "none" ? null : (
+        <div className="h-1 w-full overflow-hidden rounded-full bg-zen-fill-muted/35">
+          {showFill ? (
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${width}%`, backgroundColor: color }}
+            />
+          ) : null}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
-function MeterPair({
-  label,
-  value,
+function NetSpeedRow({
   dot,
+  label,
+  speed,
+  totalLabel,
+  total,
 }: {
+  dot: string;
   label: string;
-  value: string;
-  dot?: string;
+  speed: string;
+  totalLabel: string;
+  total: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
+    <div className="grid grid-cols-[minmax(0,1.1fr)_auto_minmax(0,0.9fr)_auto] items-baseline gap-x-3 sm:gap-x-4">
       <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-zen-fg-muted">
-        {dot ? (
-          <span
-            className="h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: dot }}
-          />
-        ) : null}
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: dot }}
+        />
         <span className="truncate">{label}</span>
       </span>
-      <span className="shrink-0 text-[13px] font-semibold tabular-nums text-zen-fg-strong">
-        {value}
+      <span className="text-[13px] font-semibold tabular-nums text-zen-fg-strong">
+        {speed}
+      </span>
+      <span className="truncate text-[13px] text-zen-fg-muted">{totalLabel}</span>
+      <span className="text-[13px] font-semibold tabular-nums text-zen-fg-strong">
+        {total}
       </span>
     </div>
   );
@@ -622,15 +640,7 @@ const MiniLineChart = ({
     displayVal2 != null && Number.isFinite(displayVal2) && displayVal2 === 0;
 
   return (
-    <div
-      ref={containerRef}
-      onMouseMove={onMouseMove}
-      onMouseLeave={onMouseLeave}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-      className="km-load-chart group flex cursor-crosshair flex-col gap-2"
-    >
+    <div className="km-load-chart group flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3 select-none">
         <span className="flex min-w-0 items-center gap-2">
           {Icon ? (
@@ -661,7 +671,7 @@ const MiniLineChart = ({
         </span>
       </div>
 
-      <div className="flex items-stretch gap-1.5 pointer-events-none">
+      <div className="flex items-stretch gap-1.5">
         <div className="flex w-14 shrink-0 flex-col justify-between py-0.5 text-right text-[10px] leading-none tabular-nums text-zen-fg-faint">
           {axisLabels.map((label, index) => (
             <span key={`${label}-${index}`}>{label}</span>
@@ -672,11 +682,20 @@ const MiniLineChart = ({
             {messages.noHistory}
           </div>
         ) : (
-          <div className="relative min-w-0 flex-1">
+          <div
+            ref={containerRef}
+            onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            className="relative min-w-0 flex-1 cursor-crosshair touch-pan-y"
+          >
             <svg
+              data-chart-main
               viewBox={`0 0 ${width} ${height}`}
               preserveAspectRatio="none"
-              className="h-24 w-full overflow-visible"
+              className="pointer-events-none h-24 w-full overflow-visible"
             >
               <defs>
                 <linearGradient
@@ -1390,68 +1409,78 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                   />
                   <h3 className={detailTitleClass}>{t.capacityLoads}</h3>
                 </div>
-                <div className="space-y-3">
-                  <LoadMeter
-                    label={t.lblCpuLoadUtil}
-                    value={formatPercent(node.cpuUsage)}
-                    percent={node.cpuUsage}
-                    color="var(--zen-series-cpu)"
-                  />
-                  <LoadMeter
-                    label={t.lblLoadAvg}
-                    value={node.loadAvg || "—"}
-                    hint={t.loadAvgHint}
-                  />
-                  <LoadMeter
-                    label={t.lblMemoryAllocated}
-                    value={`${formatStoragePair(node.memoryUsed, node.memoryTotal)} · ${formatPercent(memPercent)}`}
-                    percent={memPercent}
-                    color="var(--zen-series-mem)"
-                  />
-                  <LoadMeter
-                    label="SWAP"
-                    value={formatStoragePair(node.swapUsed, node.swapTotal)}
-                    percent={node.swapTotal > 0 ? safePercent(node.swapUsed, node.swapTotal) : null}
-                    color="var(--zen-series-swap)"
-                  />
-                  <LoadMeter
-                    label={t.lblDisk}
-                    value={`${formatStoragePair(node.diskUsed, node.diskTotal)} · ${formatPercent(diskPercent)}`}
-                    percent={diskPercent}
-                    color="var(--zen-series-disk)"
-                  />
-                  <div className="pt-1">
-                    <div className="mb-2 flex items-baseline justify-between gap-3">
-                      <span className="text-[13px] text-zen-fg-muted">
-                        {networkHeading}
-                      </span>
+                <div className="divide-y divide-zen-card-line">
+                  <div className="pb-2.5">
+                    <LoadMeter
+                      label={t.lblCpuLoadUtil}
+                      value={formatPercent(node.cpuUsage)}
+                      percent={node.cpuUsage}
+                      color="var(--zen-series-cpu)"
+                    />
+                  </div>
+                  <div className="py-2.5">
+                    <LoadMeter
+                      label={t.lblLoadAvg}
+                      value={node.loadAvg || "—"}
+                      hint={t.loadAvgHint}
+                      valueInline
+                      track="empty"
+                    />
+                  </div>
+                  <div className="py-2.5">
+                    <LoadMeter
+                      label={t.lblMemoryAllocated}
+                      value={`${formatStoragePair(node.memoryUsed, node.memoryTotal)} · ${formatPercent(memPercent)}`}
+                      percent={memPercent}
+                      color="var(--zen-series-mem)"
+                    />
+                  </div>
+                  <div className="py-2.5">
+                    <LoadMeter
+                      label="SWAP"
+                      value={formatStoragePair(node.swapUsed, node.swapTotal)}
+                      percent={
+                        node.swapTotal > 0
+                          ? safePercent(node.swapUsed, node.swapTotal)
+                          : null
+                      }
+                      color="var(--zen-series-swap)"
+                      track={node.swapTotal > 0 ? "fill" : "none"}
+                    />
+                  </div>
+                  <div className="py-2.5">
+                    <LoadMeter
+                      label={t.lblDisk}
+                      value={`${formatStoragePair(node.diskUsed, node.diskTotal)} · ${formatPercent(diskPercent)}`}
+                      percent={diskPercent}
+                      color="var(--zen-series-disk)"
+                    />
+                  </div>
+                  <div className="pt-3">
+                    <div className="mb-2 flex items-baseline gap-2 text-[13px] text-zen-fg-muted">
+                      <span>{networkHeading}</span>
                       <span className="text-xs font-medium tracking-wide text-zen-fg-subtle">
                         RX/TX
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 gap-y-1.5 min-[420px]:grid-cols-2 min-[420px]:gap-x-6">
-                      <MeterPair
-                        dot="var(--zen-series-net-in)"
-                        label={t.lblInboundRxShort}
-                        value={formatSpeed(node.netSpeedIn)}
-                      />
-                      <MeterPair
-                        label={t.lblDownloaded}
-                        value={formatTrafficGb(node.bandwidthUsedIn)}
-                      />
-                      <MeterPair
-                        dot="var(--zen-series-net-out)"
-                        label={t.lblOutboundTxShort}
-                        value={formatSpeed(node.netSpeedOut)}
-                      />
-                      <MeterPair
-                        label={t.lblUploaded}
-                        value={formatTrafficGb(node.bandwidthUsedOut)}
-                      />
-                    </div>
-                    <div className="mt-1.5 grid grid-cols-1 min-[420px]:grid-cols-2 min-[420px]:gap-x-6">
-                      <span className="hidden min-[420px]:block" />
-                      <div className="flex items-baseline justify-between gap-3 text-[13px] tabular-nums">
+                    <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-center">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <NetSpeedRow
+                          dot="var(--zen-series-net-in)"
+                          label={t.lblInboundRxShort}
+                          speed={formatSpeed(node.netSpeedIn)}
+                          totalLabel={t.lblDownloaded}
+                          total={formatTrafficGb(node.bandwidthUsedIn)}
+                        />
+                        <NetSpeedRow
+                          dot="var(--zen-series-net-out)"
+                          label={t.lblOutboundTxShort}
+                          speed={formatSpeed(node.netSpeedOut)}
+                          totalLabel={t.lblUploaded}
+                          total={formatTrafficGb(node.bandwidthUsedOut)}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-3 border-zen-card-line text-[13px] tabular-nums min-[520px]:self-stretch min-[520px]:border-l min-[520px]:pl-4">
                         {node.bandwidthTotal <= 0 ? (
                           <span
                             className={`inline-flex shrink-0 rounded-sm border px-1 py-px text-[10px] font-bold leading-none ${unlimitedTrafficBadgeClass}`}
