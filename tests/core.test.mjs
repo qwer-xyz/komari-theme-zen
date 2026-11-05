@@ -921,6 +921,69 @@ test("unset expiry shows a price or a dash instead of the not-set label", () => 
   assert.equal(invalid.text, billingLabels.billingNoInfo);
 });
 
+test("renewal badge stays hidden while expiry is unset", () => {
+  const setAt = new Date(Date.now() + 10 * 86400000).toISOString();
+  for (const expiredAt of ["", "   ", "0001-01-01T00:00:00Z", undefined]) {
+    for (const autoRenewal of [false, true]) {
+      assert.equal(
+        billingDisplay.shouldShowAutoRenewalBadge({
+          expiredAt,
+          autoRenewal,
+          showAutoRenewal: true,
+          isLongTerm: false,
+        }),
+        false,
+      );
+    }
+  }
+
+  assert.equal(
+    billingDisplay.shouldShowAutoRenewalBadge({
+      expiredAt: setAt,
+      autoRenewal: false,
+      showAutoRenewal: true,
+      isLongTerm: false,
+    }),
+    true,
+  );
+  assert.equal(
+    billingDisplay.shouldShowAutoRenewalBadge({
+      expiredAt: setAt,
+      autoRenewal: true,
+      showAutoRenewal: true,
+      isLongTerm: false,
+    }),
+    true,
+  );
+  assert.equal(
+    billingDisplay.shouldShowAutoRenewalBadge({
+      expiredAt: setAt,
+      autoRenewal: false,
+      showAutoRenewal: false,
+      isLongTerm: false,
+    }),
+    false,
+  );
+  assert.equal(
+    billingDisplay.shouldShowAutoRenewalBadge({
+      expiredAt: setAt,
+      autoRenewal: undefined,
+      showAutoRenewal: true,
+      isLongTerm: false,
+    }),
+    false,
+  );
+  assert.equal(
+    billingDisplay.shouldShowAutoRenewalBadge({
+      expiredAt: setAt,
+      autoRenewal: false,
+      showAutoRenewal: true,
+      isLongTerm: true,
+    }),
+    false,
+  );
+});
+
 test("set expiry billing text stays days, expired, or long-term", () => {
   const activeAt = new Date(Date.now() + 10 * 86400000).toISOString();
   const active = billingDisplay.formatNodeBilling(

@@ -35,6 +35,25 @@ export function isExpiryUnset(expiredAt: string | undefined): boolean {
   return expiredAt.startsWith("0001");
 }
 
+/**
+ * Auto/manual tags sit beside the expiry. An unset date renders as "—" and
+ * must not carry either tag. A set date keeps the previous badge, including
+ * when price 0 still prints a dash. Long-term nodes use their own badge.
+ */
+export function shouldShowAutoRenewalBadge(input: {
+  expiredAt: string | undefined;
+  autoRenewal: boolean | undefined;
+  showAutoRenewal: boolean;
+  isLongTerm: boolean;
+}): boolean {
+  return (
+    input.showAutoRenewal &&
+    typeof input.autoRenewal === "boolean" &&
+    !isExpiryUnset(input.expiredAt) &&
+    !input.isLongTerm
+  );
+}
+
 export function resolveExpiryState(expiredAt: string | undefined): ExpiryState {
   if (isExpiryUnset(expiredAt)) {
     return { kind: "none", daysRemaining: -1 };
