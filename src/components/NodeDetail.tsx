@@ -1251,9 +1251,6 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
       : hasRemainingValue
         ? `${renewalPriceLabel} | ${remainingValueLabel} ${t.billingRemainingValueShort}`
         : renewalPriceLabel;
-  const networkHeading = t.lblNetworkSpeedRxTx
-    .replace(/\s*RX\/TX\s*/i, "")
-    .trim();
 
   const hardwareCard = (
     <section className={`${detailCardClass} h-full`}>
@@ -1440,12 +1437,6 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
                     color="var(--zen-series-disk)"
                   />
                   <div>
-                    <div className="mb-2 flex items-baseline gap-2 text-[13px] text-zen-fg-muted">
-                      <span>{networkHeading}</span>
-                      <span className="text-xs font-medium tracking-wide text-zen-fg-subtle">
-                        RX/TX
-                      </span>
-                    </div>
                     <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-center">
                       <div className="min-w-0 flex-1 space-y-1.5">
                         <NetSpeedRow
