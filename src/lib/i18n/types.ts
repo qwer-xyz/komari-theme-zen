@@ -127,8 +127,12 @@ export type Messages = {
   lblActiveProcesses: string;
   lblStatusOk: string;
   overviewAllOnline: string;
+  overviewNodesOnline: string;
+  overviewRegions: string;
+  filter: string;
   overviewOfflineCount: (count: number) => string;
-  overviewRecentHourTrend: string;
+  overviewRecentTrend: string;
+  overviewBandwidthTrend: string;
   unitNodes: string;
   msgNodeOfflineAwaiting: string;
   pingNoTasks: string;

@@ -9,7 +9,6 @@ import {
   ArrowUp,
   Cpu,
   Gauge,
-  Globe,
   HardDrive,
   MapPin,
   MemoryStick,
@@ -18,9 +17,6 @@ import {
   Waves,
   type LucideIcon,
 } from "lucide-react";
-import { zenMotion } from "@/lib/zenMotion";
-import { zenText } from "@/lib/zenSemantics";
-import { zenType } from "@/lib/typography";
 
 export type OverviewHeroMetric = {
   label: string;
@@ -34,6 +30,8 @@ export type OverviewHeroMetric = {
 export type OverviewStatMetric = {
   label: string;
   value: React.ReactNode;
+  mobileValue?: React.ReactNode;
+  detail?: React.ReactNode;
   icon: LucideIcon;
 };
 
@@ -46,14 +44,6 @@ type DashboardOverviewPanelProps = {
   nodeMapLabel: string;
   onOpenNodeMap: () => void;
 };
-
-function MetricIcon({ icon: Icon }: { icon: LucideIcon }) {
-  return (
-    <span className="inline-flex size-8 sm:size-11 shrink-0 items-center justify-center rounded-lg border border-zen-line bg-zen-elevate/55 text-zen-accent shadow-[inset_0_1px_0_var(--zen-elevate)] @xl:size-10 @7xl:size-12">
-      <Icon className="size-5 @7xl:size-[22px]" strokeWidth={1.8} aria-hidden />
-    </span>
-  );
-}
 
 function MetricSparkline({ values }: { values?: (number | null)[] }) {
   if (!values?.length) return null;
@@ -88,17 +78,10 @@ function MetricSparkline({ values }: { values?: (number | null)[] }) {
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="h-8 w-full min-w-0 overflow-visible text-zen-accent @5xl:h-10"
+      preserveAspectRatio="none"
+      className="km-overview-sparkline"
       aria-hidden
     >
-      <line
-        x1="0"
-        y1={height - 2}
-        x2={width}
-        y2={height - 2}
-        stroke="currentColor"
-        strokeOpacity="0.14"
-      />
       {segments.map((points, index) =>
         points.length > 1 ? (
           <polyline
@@ -129,44 +112,49 @@ function MetricSparkline({ values }: { values?: (number | null)[] }) {
 
 function HeroMetric({
   metric,
-  action,
+  index,
+  onOpenNodeMap,
+  nodeMapLabel,
 }: {
   metric: OverviewHeroMetric;
-  action?: React.ReactNode;
+  index: number;
+  onOpenNodeMap?: () => void;
+  nodeMapLabel: string;
 }) {
+  const value = (
+    <>
+      <span className="km-overview-number">{metric.value}</span>
+      {metric.suffix ? (
+        <span className="km-overview-unit">{metric.suffix}</span>
+      ) : null}
+    </>
+  );
   return (
-    <div className="relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-3 px-4 py-3 sm:gap-4 sm:px-5 sm:py-5 @xl:min-h-36 @xl:gap-3 @xl:px-4 @xl:py-4 @5xl:min-h-40 @5xl:px-5 @7xl:gap-5 @7xl:px-7 @7xl:py-5">
-      <MetricIcon icon={metric.icon} />
-      <div className="flex min-w-0 flex-col justify-center">
-        <span
-          className={`${zenType.label} ${zenText.muted} mb-2 min-w-0 font-mono uppercase leading-tight zen-track-tight`}
-          title={metric.label}
-        >
-          {metric.label}
-        </span>
-        <div className="grid min-w-0 grid-cols-[minmax(0,auto)_minmax(4.5rem,7rem)] items-center gap-3 @xl:grid-cols-1 @xl:gap-1.5 @5xl:grid-cols-[minmax(0,auto)_minmax(4.5rem,7rem)] @5xl:gap-3">
-          <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-            <span className="text-[2rem] sm:text-[2.5rem] font-black leading-none tabular-nums text-zen-fg-strong @xl:text-[2.25rem] @5xl:text-[2.75rem] @7xl:text-[3rem]">
-              {metric.value}
-            </span>
-            {metric.suffix ? (
-              <span className="shrink-0 font-mono text-sm font-bold text-zen-fg-muted @xl:text-xs @5xl:text-base @7xl:text-xl">
-                {metric.suffix}
-              </span>
-            ) : null}
+    <div className={`km-overview-hero km-overview-hero-${index}`}>
+      <div className="km-overview-reading">
+        <span className="km-overview-label">{metric.label}</span>
+        {onOpenNodeMap ? (
+          <button
+            type="button"
+            className="km-overview-value hover:text-zen-accent"
+            onClick={onOpenNodeMap}
+            aria-label={`${metric.label}: ${metric.value} ${metric.suffix ?? ""}. ${nodeMapLabel}`}
+            title={nodeMapLabel}
+          >
+            {value}
+          </button>
+        ) : (
+          <div className="km-overview-value" title={metric.caption}>
+            {value}
           </div>
-          <MetricSparkline values={metric.chartValues} />
-        </div>
-        <span
-          className={`${zenType.caption} ${zenText.muted} mt-2 block min-w-0 font-mono leading-tight normal-case`}
-          title={metric.caption}
-        >
-          {metric.caption}
-        </span>
+        )}
       </div>
-      {action ? (
-        <div className="absolute bottom-5 right-5 @xl:bottom-4 @xl:right-4 @5xl:bottom-5 @5xl:right-5 @7xl:bottom-6 @7xl:right-8">
-          {action}
+      {metric.chartValues ? (
+        <div className="km-overview-trend">
+          <span className="km-overview-label km-overview-trend-label">
+            {metric.caption}
+          </span>
+          <MetricSparkline values={metric.chartValues} />
         </div>
       ) : null}
     </div>
@@ -174,26 +162,19 @@ function HeroMetric({
 }
 
 function StatMetric({ metric }: { metric: OverviewStatMetric }) {
-  const Icon = metric.icon;
   return (
-    <div className="grid min-h-[4.5rem] min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-2 px-3 py-3 sm:grid-cols-[2.25rem_minmax(0,1fr)] sm:gap-3 sm:px-5 sm:py-3.5">
-      <span className="inline-flex size-7 items-center justify-center rounded-md border border-zen-line bg-zen-elevate/45 text-zen-accent sm:size-9">
-        <Icon
-          className="size-3.5 sm:size-[17px]"
-          strokeWidth={1.8}
-          aria-hidden
-        />
-      </span>
-      <div className="min-w-0 font-mono">
-        <span
-          className={`${zenType.label} ${zenText.muted} block leading-tight normal-case`}
-          title={metric.label}
-        >
-          {metric.label}
-        </span>
-        <div className="mt-1 min-w-0 break-words text-[0.6875rem] font-bold leading-tight text-zen-fg-strong sm:text-[0.8125rem]">
+    <div className="km-overview-stat">
+      <span className="km-overview-label">{metric.label}</span>
+      <div className="km-overview-stat-value">
+        <span className={metric.mobileValue ? "hidden lg:inline" : undefined}>
           {metric.value}
-        </div>
+        </span>
+        {metric.mobileValue ? (
+          <span className="lg:hidden">{metric.mobileValue}</span>
+        ) : null}
+        {metric.detail ? (
+          <span className="km-overview-stat-detail">{metric.detail}</span>
+        ) : null}
       </div>
     </div>
   );
@@ -211,50 +192,31 @@ export function DashboardOverviewPanel({
   if (!showHeroes && !showStats) return null;
 
   return (
-    <div className="space-y-3 pt-1 @3xl:pt-3">
+    <div className="km-overview">
       {showHeroes ? (
-        <section className="overflow-hidden rounded-xl border border-zen-line bg-zen-surface/75 shadow-[0_10px_30px_rgba(38,35,28,0.06)] backdrop-blur-sm dark:shadow-[0_14px_34px_rgba(0,0,0,0.18)]">
-          <div className="grid grid-cols-1 divide-y divide-zen-line @xl:grid-cols-3 @xl:divide-x @xl:divide-y-0">
-            {heroes.map((metric, index) => (
-              <React.Fragment key={metric.label}>
-                <HeroMetric
-                  metric={metric}
-                  action={
-                    index === 0 && showNodeMap ? (
-                      <button
-                        type="button"
-                        onClick={onOpenNodeMap}
-                        aria-label={nodeMapLabel}
-                        title={nodeMapLabel}
-                        className={`inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-zen-line bg-zen-elevate/35 text-zen-fg-muted hover:border-zen-accent/50 hover:text-zen-accent ${zenMotion.pop}`}
-                      >
-                        <Globe size={16} strokeWidth={1.8} aria-hidden />
-                      </button>
-                    ) : null
-                  }
-                />
-              </React.Fragment>
-            ))}
-          </div>
+        <section className="km-overview-heroes">
+          {heroes.map((metric, index) => (
+            <React.Fragment key={metric.label}>
+              <HeroMetric
+                metric={metric}
+                index={index}
+                onOpenNodeMap={
+                  index === 0 && showNodeMap ? onOpenNodeMap : undefined
+                }
+                nodeMapLabel={nodeMapLabel}
+              />
+            </React.Fragment>
+          ))}
         </section>
       ) : null}
 
       {showStats ? (
-        <section className="overflow-hidden rounded-xl border border-zen-line bg-zen-surface/65 shadow-[0_8px_24px_rgba(38,35,28,0.045)] backdrop-blur-sm dark:shadow-[0_10px_28px_rgba(0,0,0,0.14)]">
-          <div className="grid grid-cols-2 md:grid-cols-4">
-            {stats.map((metric, index) => (
-              <div
-                key={metric.label}
-                className={`${index % 2 ? "border-l border-zen-line" : ""} ${
-                  index >= 2 ? "border-t border-zen-line" : ""
-                } ${
-                  index % 4 ? "md:border-l md:border-zen-line" : "md:border-l-0"
-                } ${index >= 4 ? "md:border-t md:border-zen-line" : "md:border-t-0"}`}
-              >
-                <StatMetric metric={metric} />
-              </div>
-            ))}
-          </div>
+        <section className="km-overview-stats">
+          {stats.map((metric) => (
+            <React.Fragment key={metric.label}>
+              <StatMetric metric={metric} />
+            </React.Fragment>
+          ))}
         </section>
       ) : null}
     </div>

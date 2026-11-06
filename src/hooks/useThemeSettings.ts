@@ -104,6 +104,8 @@ export function useThemeSettings(): ThemeSettings {
 }
 
 export function parseThemeSettings(settings: unknown): ThemeSettings {
+  // The compact manifest exposes only common controls. Continue reading the
+  // retired keys for existing installs; Komari's managed form merges saves.
   const raw =
     settings && typeof settings === "object" && !Array.isArray(settings)
       ? (settings as Record<string, unknown>)

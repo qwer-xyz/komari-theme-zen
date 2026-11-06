@@ -9,6 +9,7 @@ import { useRPC2Call } from "@/contexts/RPC2Context";
 import { useRecordSettings } from "@/hooks/useRecordSettings";
 import {
   aggregateDashboardTrends,
+  DASHBOARD_TREND_RANGE_MS,
   loadRecordsToDashboardTrend,
   recentRecordsToDashboardTrend,
   type DashboardTrendSample,
@@ -34,8 +35,8 @@ import {
   queryRecords,
 } from "@/lib/recordQueries";
 
-const HISTORY_HOURS = 1;
-const POLL_MS = 5 * 60_000;
+const HISTORY_HOURS = DASHBOARD_TREND_RANGE_MS / 3_600_000;
+const POLL_MS = 20_000;
 const CONCURRENCY = 3;
 const METRIC_METHOD = "public:queryMetrics";
 
@@ -74,7 +75,8 @@ async function fetchLoadRecords(
       {
         uuid,
         type: "load",
-        hours: HISTORY_HOURS,
+        // Older record endpoints accept whole hours; aggregation crops the range.
+        hours: Math.ceil(HISTORY_HOURS),
       },
       signal,
     );
@@ -84,7 +86,7 @@ async function fetchLoadRecords(
     if (!isRpcMethodUnsupported(rpcError)) throw rpcError;
     try {
       return extractLoadRecords(
-        await fetchLegacyLoadRecords(uuid, HISTORY_HOURS, signal),
+        await fetchLegacyLoadRecords(uuid, Math.ceil(HISTORY_HOURS), signal),
       );
     } catch {
       throw rpcError;
@@ -98,22 +100,23 @@ async function fetchNodeTrend(
   recordEnabled: boolean,
   signal: AbortSignal,
 ): Promise<[string, DashboardTrendSample[]] | null> {
-  let hasSuccessfulSource = false;
+  const recent = await fetchRecent(uuid, signal);
+  signal.throwIfAborted();
+  if (recent?.length) return [uuid, recent];
+
   if (recordEnabled) {
     const loadRecords = await fetchLoadRecords(call, uuid, signal).catch(
       () => null,
     );
     signal.throwIfAborted();
     if (loadRecords) {
-      hasSuccessfulSource = true;
       const samples = loadRecordsToDashboardTrend(loadRecords);
-      if (samples.length) return [uuid, samples];
+      return [uuid, samples];
     }
   }
   signal.throwIfAborted();
-  const recent = await fetchRecent(uuid, signal);
   if (recent) return [uuid, recent];
-  return hasSuccessfulSource ? [uuid, []] : null;
+  return null;
 }
 
 async function fetchMetricTrends(

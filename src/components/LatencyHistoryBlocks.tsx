@@ -349,7 +349,7 @@ export function LatencyHistoryBlocks({
       <span
         role={onValueClick && currentMs > 0 ? "button" : undefined}
         tabIndex={onValueClick && currentMs > 0 ? 0 : undefined}
-        className={`text-right font-bold tabular-nums ${valueColor} ${
+        className={`text-right font-mono font-medium tabular-nums ${valueColor} ${
           onValueClick && currentMs > 0
             ? "cursor-pointer hover:opacity-80 transition-opacity"
             : ""

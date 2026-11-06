@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Globe } from "lucide-react";
 import { LANG_MENU_OPTIONS, type Lang } from "@/lib/i18n";
 import { zenMotion } from "@/lib/zenMotion";
+import { zenControl } from "@/lib/zenSemantics";
 
 export function LanguageMenu({
   lang,
@@ -56,6 +57,7 @@ export function LanguageMenu({
         ref={trigger}
         type="button"
         aria-label={`Language / 语言: ${LANG_MENU_OPTIONS[selected]?.label[lang]}`}
+        title={LANG_MENU_OPTIONS[selected]?.label[lang]}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
@@ -68,8 +70,8 @@ export function LanguageMenu({
         }}
         className={
           tone === "detail"
-            ? `inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-zen-fg-strong transition-colors hover:text-zen-accent ${open ? "text-zen-accent" : ""}`
-            : `inline-flex min-h-10 max-w-[12rem] items-center gap-2 rounded-md px-2.5 font-bold text-zen-fg-strong transition-colors hover:bg-zen-elevate focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zen-accent ${open ? "bg-zen-elevate text-zen-accent" : ""}`
+            ? `${zenControl.trigger} ${open ? "text-zen-accent" : ""}`
+            : `${zenControl.trigger} max-w-[12rem] ${open ? "bg-zen-elevate text-zen-accent" : ""}`
         }
       >
         {tone === "detail" ? (
@@ -93,7 +95,7 @@ export function LanguageMenu({
           id={id}
           role="menu"
           aria-label="Language / 语言"
-          className={`absolute right-0 top-full z-[80] mt-1.5 w-48 max-w-[calc(100vw-2rem)] origin-top-right rounded-lg border border-zen-border bg-zen-surface p-1.5 font-mono text-sm shadow-lg ${zenMotion.menuPanel}`}
+          className={`absolute right-0 top-full z-[80] mt-1.5 w-48 max-w-[calc(100vw-2rem)] origin-top-right ${zenControl.menu} ${zenMotion.menuPanel}`}
           onKeyDown={(event) => {
             const index = items.current.findIndex(
               (item) => item === document.activeElement,
@@ -131,7 +133,7 @@ export function LanguageMenu({
                 onChange(option.value);
                 close();
               }}
-              className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-md px-3 text-left transition-colors hover:bg-zen-elevate focus:bg-zen-elevate focus:outline-none ${lang === option.value ? "font-bold text-zen-accent" : "text-zen-fg-strong"}`}
+              className={`${zenControl.item} justify-between ${lang === option.value ? "font-medium text-zen-accent" : "text-zen-fg-strong"}`}
             >
               <span>{option.label[lang]}</span>
               {lang === option.value ? (

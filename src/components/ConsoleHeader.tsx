@@ -28,7 +28,7 @@ import {
 } from "@/lib/formatUnits";
 import { formatResidualCurrency } from "@/lib/residualValue";
 import { zenType, zenTouch } from "@/lib/typography";
-import { zenBorder, zenText } from "@/lib/zenSemantics";
+import { zenBorder, zenText, zenControl } from "@/lib/zenSemantics";
 import { zenMotion } from "@/lib/zenMotion";
 import { NodeDistributionMapModal } from "@/components/NodeDistributionMapModal";
 import type { NodeDistributionMapNode } from "@/components/NodeDistributionMap";
@@ -306,14 +306,14 @@ function LocalClock({
   loadingLabel,
   textMuted,
   textPrimary,
-  compact = false,
+  mobile = false,
   className = "",
 }: {
   label: string;
   loadingLabel: string;
   textMuted: string;
   textPrimary: string;
-  compact?: boolean;
+  mobile?: boolean;
   className?: string;
 }) {
   const now = useSyncExternalStore(
@@ -328,22 +328,26 @@ function LocalClock({
   const localTime = useMemo(
     () =>
       now
-        ? new Date(now).toLocaleString(undefined, {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-            ...(compact
-              ? {}
-              : {
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                }),
-          })
+        ? (() => {
+            const date = new Date(now);
+            const pad = (value: number) => String(value).padStart(2, "0");
+            const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+            return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${time}`;
+          })()
         : "",
-    [compact, now],
+    [now],
   );
+
+  if (mobile) {
+    return (
+      <div className={`km-mobile-site-clock ${className}`} aria-label={label}>
+        <time dateTime={now ? new Date(now).toISOString() : undefined}>{localTime || loadingLabel}</time>
+        {timeZone ? (
+          <span className="km-mobile-site-zone" title={timeZone}>{timeZone}</span>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className={className}>
@@ -381,6 +385,11 @@ function DetailThemeControl({
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (open) root.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -410,14 +419,42 @@ function DetailThemeControl({
   ];
 
   return (
-    <div ref={root} className="relative">
+    <div
+      ref={root}
+      className="relative"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setOpen(false);
+          trigger.current?.focus();
+        } else if (open && ["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+          event.preventDefault();
+          const items = [...(event.currentTarget as HTMLDivElement).querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+          const index = Math.max(0, items.indexOf(document.activeElement as HTMLButtonElement));
+          const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+            : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+          items[next]?.focus();
+        }
+      }}
+    >
       <button
+        ref={trigger}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={current.label}
+        title={current.label}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-zen-fg-strong hover:text-zen-accent"
+        onKeyDown={(event) => {
+          if (!open && ["ArrowDown", "ArrowUp"].includes(event.key)) {
+            event.preventDefault();
+            setOpen(true);
+          }
+        }}
+        className={zenControl.trigger}
       >
         <current.Icon size={16} strokeWidth={1.75} aria-hidden />
         {showLabel ? <span>{current.label}</span> : null}
@@ -425,23 +462,21 @@ function DetailThemeControl({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-[80] mt-1.5 w-36 rounded-xl border border-zen-card-line bg-zen-card p-1 text-sm shadow-sm"
+          className={`absolute right-0 z-[80] mt-1.5 w-36 ${zenControl.menu}`}
         >
           {options.map((option) => (
             <button
               key={option.id}
               type="button"
               role="menuitemradio"
+              tabIndex={-1}
               aria-checked={themePreference === option.id}
               onClick={() => {
                 setThemePreference(option.id);
                 setOpen(false);
+                trigger.current?.focus();
               }}
-              className={`flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left ${
-                themePreference === option.id
-                  ? "font-medium text-zen-chip-fg"
-                  : "text-zen-fg-strong hover:bg-zen-elevate"
-              }`}
+              className={zenControl.item}
             >
               <option.Icon size={15} strokeWidth={1.75} aria-hidden />
               {option.label}
@@ -657,7 +692,7 @@ export function ConsoleHeader({
       href="/admin"
       aria-label={label || t.controlWorkspace}
       title={label || t.controlWorkspace}
-      className={`inline-flex shrink-0 items-center justify-center gap-1.5 ${label ? "px-1 py-1 text-sm font-medium" : zenTouch.btn} cursor-pointer transition-colors ${btnHoverColor} ${textPrimary} ${className}`}
+      className={`${zenControl.trigger} shrink-0 ${className}`}
     >
       <Settings size={label ? 16 : 15} strokeWidth={1.75} aria-hidden />
       {label ? <span>{label}</span> : null}
@@ -699,7 +734,7 @@ export function ConsoleHeader({
 
   const headerControls = (compact = false) => (
     <div
-      className={`flex flex-wrap items-center justify-end font-sans normal-case tracking-normal ${
+      className={`flex flex-wrap items-center justify-end font-sans normal-case tracking-normal ${view === "dashboard" && !compact ? "km-dashboard-controls" : ""} ${
         compact ? "gap-1" : "gap-x-3 gap-y-1"
       }`}
     >
@@ -709,6 +744,7 @@ export function ConsoleHeader({
         tone="detail"
         compact={compact}
       />
+      <div className={view === "dashboard" && !compact ? "km-dashboard-theme" : undefined}>
       <DetailThemeControl
         themePreference={themePreference}
         setThemePreference={setThemePreference}
@@ -719,40 +755,44 @@ export function ConsoleHeader({
           dark: t.themeDark,
         }}
       />
+      </div>
       {compact ? adminEntryLink("p-1") : adminEntryLink("", t.settingsLabel)}
     </div>
   );
 
   return (
-    <header className={`km-navbar font-sans ${zenType.body} uppercase select-none`}>
-      {/* 1. Responsive Top Bar with absolute vertical alignment (items-center) */}
-      <div className="pb-5 md:pb-6">
-        <div className="md:hidden space-y-1">
-          <h1 className={siteTitleClass}>{renderSiteTitle()}</h1>
-          {siteDescription ? (
-            <p
-              className={`${zenType.caption} ${textMuted} font-mono normal-case tracking-wide break-words leading-relaxed`}
-            >
-              {siteDescription}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="md:hidden flex items-start justify-between gap-4 mt-3">
+    <header className={`km-navbar ${view === "dashboard" ? "km-navbar-dashboard" : ""} font-sans ${zenType.body} select-none`}>
+      <div className="km-mobile-site-header">
+        <h1 className="km-mobile-site-title">{renderSiteTitle()}</h1>
+        <div className="km-mobile-site-meta">
           <LocalClock
             label={t.localTime}
             loadingLabel={t.loading}
             textMuted={textMuted}
             textPrimary={textPrimary}
-            compact
-            className="flex min-w-0 flex-1 flex-col text-left font-mono"
+            mobile
           />
-          <div className="max-w-[68%] shrink-0 pt-0.5">
-            {headerControls()}
-          </div>
+          <div className="km-mobile-site-actions">{headerControls(true)}</div>
         </div>
-
-        <div className="hidden md:grid md:grid-cols-3 gap-6 items-center">
+      </div>
+      {view === "dashboard" ? (
+        <div className="km-dashboard-topbar">
+          <div className="km-dashboard-brand">
+            <h1 className="km-dashboard-title">{renderSiteTitle()}</h1>
+            {siteDescription ? <p className="km-dashboard-description">{siteDescription}</p> : null}
+          </div>
+          <LocalClock
+            label={t.localTime}
+            loadingLabel={t.loading}
+            textMuted={textMuted}
+            textPrimary={textPrimary}
+            className="km-dashboard-desktop-clock flex-col items-center text-center font-mono"
+          />
+          <div className="km-dashboard-actions">{headerControls()}</div>
+        </div>
+      ) : (
+      <div className="hidden pb-6 lg:block">
+        <div className="grid grid-cols-3 gap-6 items-center">
           {/* Left: App Logo/Branding (Single Word KOMARI) */}
           <div className="text-left min-w-0">
             <h1 className={siteTitleClass}>{renderSiteTitle()}</h1>
@@ -778,6 +818,7 @@ export function ConsoleHeader({
           <div className="flex justify-end">{headerControls()}</div>
         </div>
       </div>
+      )}
 
       {/* 2. RESTRUCTURED HIGH-DENSITY BALANCED TELEMETRY CHANNELS */}
       {view !== "detail" && (
@@ -788,7 +829,7 @@ export function ConsoleHeader({
               showStats={showOverviewStats}
               heroes={[
                 {
-                  label: t.lblClusterNodeStatus,
+                  label: t.overviewNodesOnline,
                   value: String(totalOnline),
                   suffix: `/ ${totalNodes}`,
                   caption:
@@ -803,7 +844,7 @@ export function ConsoleHeader({
                   label: dashboardCpuLabel,
                   value: dashboardCpuUsage.toFixed(1),
                   suffix: "%",
-                  caption: t.overviewRecentHourTrend,
+                  caption: t.overviewRecentTrend,
                   icon: overviewIcons.cpu,
                   chartValues: overviewTrends.cpu,
                 },
@@ -811,7 +852,7 @@ export function ConsoleHeader({
                   label: dashboardBandwidthLabel,
                   value: speedVal,
                   suffix: speedUnit,
-                  caption: t.overviewRecentHourTrend,
+                  caption: t.overviewBandwidthTrend,
                   icon: overviewIcons.bandwidth,
                   chartValues: overviewTrends.bandwidth,
                 },
@@ -832,7 +873,7 @@ export function ConsoleHeader({
                       icon: overviewIcons.nodeStatus,
                     },
                 {
-                  label: t.lblTotalRegions,
+                  label: t.overviewRegions,
                   value: String(totalRegions),
                   icon: overviewIcons.regions,
                 },
@@ -847,7 +888,8 @@ export function ConsoleHeader({
                     totalMemoryUsed,
                     totalMemory,
                     avgMemoryPercent,
-                  ),
+                  ).replace(/ \([^)]*\)$/, ""),
+                  detail: `(${avgMemoryPercent.toFixed(1)}%)`,
                   icon: overviewIcons.memory,
                 },
                 {
@@ -857,23 +899,15 @@ export function ConsoleHeader({
                     totalDisk,
                     avgDiskPercent,
                     { usedDigits: 0, totalDigits: 0 },
-                  ),
+                  ).replace(/ \([^)]*\)$/, ""),
+                  detail: `(${avgDiskPercent.toFixed(1)}%)`,
                   icon: overviewIcons.disk,
                 },
                 {
                   label: t.cumulativeBandwidth,
                   value: `${formattedBandwidth} ${bandwidthUnit}`,
+                  detail: `(RX ${formatTrafficGb(totalUsedIn)} / TX ${formatTrafficGb(totalUsedOut)})`,
                   icon: overviewIcons.traffic,
-                },
-                {
-                  label: t.lblInboundRxShort || "RX",
-                  value: formatTrafficGb(totalUsedIn),
-                  icon: overviewIcons.rx,
-                },
-                {
-                  label: t.lblOutboundTxShort || "TX",
-                  value: formatTrafficGb(totalUsedOut),
-                  icon: overviewIcons.tx,
                 },
               ]}
               showNodeMap={showNodeMap}

@@ -26,7 +26,13 @@ export const zenFill = {
 } as const;
 
 export const zenPopover =
-  "border border-zen-border-muted bg-zen-surface/95 text-zen-fg-muted shadow-[0_4px_14px_rgba(0,0,0,0.08)]";
+  "zen-menu-panel text-zen-fg-muted";
+
+export const zenControl = {
+  trigger: "zen-control-trigger",
+  menu: "zen-menu-panel",
+  item: "zen-menu-item",
+} as const;
 
 export const zenInteractive = {
   tabIdle:

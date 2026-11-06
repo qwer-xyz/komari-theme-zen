@@ -1,25 +1,33 @@
 import { useLayoutEffect } from "react";
-import { applyColorScheme, resolveColorScheme } from "@/lib/colorScheme";
+import {
+  applyColorScheme,
+  colorSchemeFromTheme,
+  resolveColorScheme,
+} from "@/lib/colorScheme";
 import type { ColorPresetId, ColorSchemeOverrides } from "@/lib/colorScheme";
 import type { ResolvedTheme } from "@/hooks/useThemePreference";
+import { readThemeSettingsCache } from "@/lib/themeAppearance";
 
 export function useColorScheme(
   theme: ResolvedTheme,
   presetId: ColorPresetId,
   overrides: ColorSchemeOverrides,
-  enabled = true,
+  hasPublicSettings = true,
 ): void {
   useLayoutEffect(() => {
-    if (!enabled) return;
+    // A pending/failed public-info request must not freeze the previous mode's colors.
+    const settings = hasPublicSettings
+      ? { presetId, overrides }
+      : colorSchemeFromTheme(readThemeSettingsCache() ?? {});
     applyColorScheme(
       resolveColorScheme({
-        presetId,
+        presetId: settings.presetId,
         mode: theme,
-        overrides,
+        overrides: settings.overrides,
       }),
     );
   }, [
-    enabled,
+    hasPublicSettings,
     theme,
     presetId,
     overrides.bgLight,

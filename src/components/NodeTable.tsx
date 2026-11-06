@@ -7,11 +7,13 @@ import React, {
   useState,
   useMemo,
   useEffect,
+  useLayoutEffect,
   useRef,
   useCallback,
   useDeferredValue,
 } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { ChevronDown, LayoutGrid, Search, Table2, X } from "lucide-react";
 import { VPSNode } from "../types";
 import { translations, Lang, formatMsg } from "../lib/i18n";
 import {
@@ -51,6 +53,7 @@ import { PublicRemarkButton } from "@/components/PublicRemarkButton";
 import { LatencyHistoryBlocks } from "@/components/LatencyHistoryBlocks";
 import { LatencyProbeModal } from "@/components/LatencyProbeModal";
 import { MetricPercentBar } from "@/components/MetricSegmentBar";
+import { UIState } from "@/components/UIState";
 import {
   type LatencyColorConfig,
   metricPercentFillClass,
@@ -58,6 +61,7 @@ import {
 import { zenType, zenTouch } from "@/lib/typography";
 import {
   zenBorder,
+  zenControl,
   zenFill,
   zenInteractive,
   zenText,
@@ -90,13 +94,13 @@ const renderTrafficValue = (node: VPSNode) => (
     <span className="truncate">{formatNodeTraffic(node)}</span>
     {node.bandwidthTotal <= 0 ? (
       <span
-        className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-bold tracking-wide leading-none ${unlimitedTrafficBadgeClass}`}
+        className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-medium tracking-wide leading-none ${unlimitedTrafficBadgeClass}`}
       >
         <span className={unlimitedTrafficSymbolClass}>∞</span>
       </span>
     ) : (
       <span
-        className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-bold tracking-wide leading-none ${trafficTypeBadgeClass(node.trafficLimitType)}`}
+        className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-medium tracking-wide leading-none ${trafficTypeBadgeClass(node.trafficLimitType)}`}
       >
         {getTrafficTypeShortLabel(node.trafficLimitType)}
       </span>
@@ -123,7 +127,7 @@ function NodeUptime({
   const hasUptime = node.status === "online" && node.uptimeSec > 0;
   return (
     <span
-      className={className}
+      className={`font-mono tabular-nums ${className ?? ""}`}
       title={
         hasUptime
           ? `${t.lblUptimeSec} ${formatUptime(node.uptimeSec, labels)}`
@@ -162,25 +166,25 @@ const NodeListRow = React.memo(function NodeListRow({
 
   const cpuColor =
     node.cpuUsage > 75
-      ? "text-zen-danger font-bold"
+      ? "text-zen-danger font-medium"
       : node.cpuUsage > 40
-        ? "text-zen-warning font-bold"
+        ? "text-zen-warning font-medium"
         : textPrimary;
 
   const memPercent = safePercent(node.memoryUsed, node.memoryTotal);
   const memColor =
     memPercent > 80
-      ? "text-zen-danger font-bold"
+      ? "text-zen-danger font-medium"
       : memPercent > 50
-        ? "text-zen-warning font-bold"
+        ? "text-zen-warning font-medium"
         : textPrimary;
 
   const diskPercent = safePercent(node.diskUsed, node.diskTotal);
   const diskColor =
     diskPercent > 80
-      ? "text-zen-danger font-bold"
+      ? "text-zen-danger font-medium"
       : diskPercent > 50
-        ? "text-zen-warning font-bold"
+        ? "text-zen-warning font-medium"
         : textPrimary;
 
   return (
@@ -196,7 +200,7 @@ const NodeListRow = React.memo(function NodeListRow({
       }`}
     >
       {/* Identification */}
-      <td className={`py-3 px-2 font-sans font-black ${textPrimary}`}>
+      <td className={`py-3 px-2 font-sans font-semibold ${textPrimary}`}>
         <div className="flex flex-col gap-0.5 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <Flag flag={node.flag} className="w-4 h-4 shrink-0" />
@@ -210,7 +214,7 @@ const NodeListRow = React.memo(function NodeListRow({
             </Link>
             {node.status !== "online" ? (
               <span
-                className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-bold ${
+                className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-medium ${
                   node.status === "unknown"
                     ? "border-zen-warning/40 text-zen-warning"
                     : "border-zen-border-muted text-zen-fg-muted"
@@ -317,7 +321,7 @@ const NodeListRow = React.memo(function NodeListRow({
       <td className="py-3 px-2">
         {node.online ? (
           <span
-            className={`inline-flex items-baseline gap-x-2 font-bold ${textPrimary}`}
+            className={`inline-flex items-baseline gap-x-2 font-medium ${textPrimary}`}
           >
             <span>↓ {formatSpeed(node.netSpeedIn)}</span>
             <span>↑ {formatSpeed(node.netSpeedOut)}</span>
@@ -330,7 +334,7 @@ const NodeListRow = React.memo(function NodeListRow({
       {/* Traffic Quantity */}
       <td className="py-3 px-2">
         {node.online ? (
-          <span className={`font-bold ${textPrimary}`}>
+          <span className={`font-medium ${textPrimary}`}>
             {renderTrafficValue(node)}
           </span>
         ) : (
@@ -339,7 +343,7 @@ const NodeListRow = React.memo(function NodeListRow({
       </td>
 
       {showExpiryTime && (
-        <td className={`py-3 px-2 ${zenType.data} font-bold`}>
+        <td className={`py-3 px-2 ${zenType.data} font-medium`}>
           {renderTableBilling(node)}
         </td>
       )}
@@ -367,32 +371,32 @@ const NodeCard = React.memo(function NodeCard({
 
   const cpuColor =
     node.cpuUsage > 75
-      ? "text-zen-danger font-bold"
+      ? "text-zen-danger font-medium"
       : node.cpuUsage > 40
-        ? "text-zen-warning font-bold"
+        ? "text-zen-warning font-medium"
         : textPrimary;
 
   const memPercent = safePercent(node.memoryUsed, node.memoryTotal);
   const memColor =
     memPercent > 80
-      ? "text-zen-danger font-bold"
+      ? "text-zen-danger font-medium"
       : memPercent > 50
-        ? "text-zen-warning font-bold"
+        ? "text-zen-warning font-medium"
         : textPrimary;
 
   const diskPercent = safePercent(node.diskUsed, node.diskTotal);
   const diskColor =
     diskPercent > 80
-      ? "text-zen-danger font-bold"
+      ? "text-zen-danger font-medium"
       : diskPercent > 50
-        ? "text-zen-warning font-bold"
+        ? "text-zen-warning font-medium"
         : textPrimary;
 
   return (
     <article
       key={node.id}
       onClick={(event) => handleNodeContainerClick(event, node)}
-      className={`km-node-card cursor-pointer group flex flex-col gap-3 p-4 sm:p-5 rounded-xl border border-zen-line bg-zen-elevate shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:border-zen-line-strong hover:shadow-[0_4px_14px_rgba(0,0,0,0.06)] [content-visibility:auto] [contain-intrinsic-size:auto_320px] ${zenMotion.card} ${
+      className={`km-node-card cursor-pointer group flex flex-col gap-3 p-4 sm:p-5 border border-zen-line bg-zen-elevate hover:border-zen-line-strong [content-visibility:auto] [contain-intrinsic-size:auto_320px] ${zenMotion.card} ${
         node.status === "offline"
           ? "bg-zen-fill-muted/10 text-zen-fg-muted"
           : node.status === "unknown"
@@ -404,7 +408,7 @@ const NodeCard = React.memo(function NodeCard({
       <div className="flex items-center gap-2 min-w-0">
         <Flag flag={node.flag} className="w-5 h-5 shrink-0" />
         <h4
-          className={`min-w-0 flex-1 truncate font-sans ${zenType.body} font-bold tracking-tight ${textPrimary}`}
+          className={`min-w-0 flex-1 truncate font-sans ${zenType.body} font-semibold tracking-normal ${textPrimary}`}
           title={node.name}
         >
           <Link
@@ -417,7 +421,7 @@ const NodeCard = React.memo(function NodeCard({
         </h4>
         {node.status !== "online" ? (
           <span
-            className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-bold ${
+            className={`shrink-0 rounded border px-1 py-px ${zenType.micro} font-medium ${
               node.status === "unknown"
                 ? "border-zen-warning/40 text-zen-warning"
                 : "border-zen-border-muted text-zen-fg-muted"
@@ -445,11 +449,11 @@ const NodeCard = React.memo(function NodeCard({
 
       {/* Fully Localized pure text metric layout with pure language alignment */}
       <div
-        className={`space-y-2 font-mono ${zenType.data} leading-relaxed uppercase ${textMuted}`}
+        className={`space-y-2 font-sans ${zenType.data} leading-relaxed ${textMuted}`}
       >
         <div className="flex justify-between">
           <span>{t.os}:</span>
-          <span className={`font-bold ${textPrimary} flex items-center gap-2`}>
+          <span className={`font-medium ${textPrimary} flex items-center gap-2`}>
             {(() => {
               const osDetails = getOSDetails(node.os, node.arch);
               return (
@@ -466,7 +470,7 @@ const NodeCard = React.memo(function NodeCard({
           <NodeUptime
             node={node}
             lang={lang}
-            className={`min-w-0 text-right font-bold tabular-nums ${textPrimary}`}
+            className={`min-w-0 text-right font-medium tabular-nums ${textPrimary}`}
           />
         </div>
         <div className="flex justify-between">
@@ -527,7 +531,7 @@ const NodeCard = React.memo(function NodeCard({
           <span>{t.bandwidth}:</span>
           {node.online ? (
             <span
-              className={`inline-flex items-baseline gap-x-2 font-bold ${textPrimary}`}
+              className={`inline-flex items-baseline gap-x-2 font-medium ${textPrimary}`}
             >
               <span>↓ {formatSpeed(node.netSpeedIn)}</span>
               <span>↑ {formatSpeed(node.netSpeedOut)}</span>
@@ -539,7 +543,7 @@ const NodeCard = React.memo(function NodeCard({
         <div className="flex justify-between gap-2">
           <span className="shrink-0">{t.traffic}:</span>
           {node.online ? (
-            <span className={`font-bold ${textPrimary} min-w-0 text-right`}>
+            <span className={`font-medium ${textPrimary} min-w-0 text-right`}>
               {renderTrafficValue(node)}
             </span>
           ) : (
@@ -659,6 +663,7 @@ export function NodeTable({
     showExpiryTime,
     showAutoRenewal,
     showOfflineGroup,
+    offlineServerPosition,
     defaultViewMode,
     defaultSortField,
     defaultSortOrder,
@@ -722,6 +727,7 @@ export function NodeTable({
   const mobileSortMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const desktopSortMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const searchEditedRef = React.useRef(false);
+  const mobileFilterRef = useRef<HTMLDetailsElement>(null);
   const groupScrollRef = useRef<HTMLDivElement>(null);
   const [groupScrollFade, setGroupScrollFade] = useState({
     left: false,
@@ -739,21 +745,42 @@ export function NodeTable({
     });
   }, []);
 
-  const { viewMode, effectiveViewMode, setViewMode } =
+  const { effectiveViewMode, setViewMode } =
     useViewMode(defaultViewMode);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!openSortMenu) return;
     const menuRef =
       openSortMenu === "mobile" ? mobileSortMenuRef : desktopSortMenuRef;
+    const triggerRef = openSortMenu === "mobile" ? mobileSortMenuTriggerRef : desktopSortMenuTriggerRef;
+    const placeMenu = () => {
+      const menu = menuRef.current;
+      const trigger = triggerRef.current;
+      if (!menu || !trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const below = window.innerHeight - rect.bottom - 12;
+      const above = rect.top - 12;
+      const upward = below < Math.min(menu.scrollHeight, 300) && above > below;
+      menu.style.maxHeight = `${Math.max(100, Math.min(480, upward ? above : below))}px`;
+      menu.style.top = upward ? "auto" : "100%";
+      menu.style.bottom = upward ? "calc(100% + 4px)" : "auto";
+      menu.style.marginTop = upward ? "0" : "4px";
+    };
+    placeMenu();
+    window.addEventListener("resize", placeMenu);
+    window.addEventListener("scroll", placeMenu, true);
     const frame = window.requestAnimationFrame(() => {
       const current = menuRef.current?.querySelector<HTMLElement>(
         '[aria-checked="true"]',
       );
       const first = menuRef.current?.querySelector<HTMLElement>("button");
-      (current ?? first)?.focus();
+      (current ?? first)?.focus({ preventScroll: true });
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", placeMenu);
+      window.removeEventListener("scroll", placeMenu, true);
+    };
   }, [openSortMenu]);
 
   useEffect(() => {
@@ -918,12 +945,12 @@ export function NodeTable({
           ? (plainPricePart ?? billingLabels.billingHidden)
           : billing.text;
       const urgentClass = billing.isExpired
-        ? "text-zen-danger font-bold"
+        ? "text-zen-danger font-medium"
         : billing.isUrgent
-          ? "text-zen-danger font-bold"
+          ? "text-zen-danger font-medium"
           : "";
       return (
-        <span className={`${textPrimary} font-bold ${urgentClass}`}>
+        <span className={`${textPrimary} font-medium ${urgentClass}`}>
           {longTermText}
         </span>
       );
@@ -963,7 +990,7 @@ export function NodeTable({
       if (!shouldShowBillingBadge(node)) return null;
       return (
         <span
-          className={`inline-flex shrink-0 rounded-sm border px-1 py-px font-mono ${zenType.micro} font-bold tracking-wide leading-none ${billingBadgeClass(node)}`}
+          className={`inline-flex shrink-0 rounded-sm border px-1 py-px font-mono ${zenType.micro} font-medium tracking-wide leading-none ${billingBadgeClass(node)}`}
         >
           {billingBadgeText(node)}
         </span>
@@ -982,9 +1009,9 @@ export function NodeTable({
     const renderTableBilling = (node: VPSNode) => {
       const billing = getNodeBilling(node);
       const urgentClass = billing.isExpired
-        ? "text-zen-danger font-bold"
+        ? "text-zen-danger font-medium"
         : billing.isUrgent
-          ? "text-zen-danger font-bold"
+          ? "text-zen-danger font-medium"
           : "";
       const pricePart = getPricePart(node);
       const plainPricePart = getPlainPricePart(node);
@@ -1002,7 +1029,7 @@ export function NodeTable({
 
       return (
         <span
-          className={`inline-flex min-w-0 items-baseline gap-2 ${textPrimary} font-bold ${urgentClass}`}
+          className={`inline-flex min-w-0 items-baseline gap-2 ${textPrimary} font-medium ${urgentClass}`}
         >
           <span>{mainText}</span>
           {suffixText ? <span>{suffixText}</span> : null}
@@ -1165,8 +1192,8 @@ export function NodeTable({
   // Sorting — "default" keeps the order returned by the Komari backend
   // (already weighted + offline-positioned upstream in useKomariNodes).
   const sortedNodes = useMemo(
-    () => sortNodeList(filteredNodes, sortField, sortOrder, billingLabels),
-    [filteredNodes, sortField, sortOrder, billingLabels],
+    () => sortNodeList(filteredNodes, sortField, sortOrder, billingLabels, offlineServerPosition),
+    [filteredNodes, sortField, sortOrder, billingLabels, offlineServerPosition],
   );
   const pageSize = 100;
   const pageCount = Math.max(1, Math.ceil(sortedNodes.length / pageSize));
@@ -1269,11 +1296,6 @@ export function NodeTable({
 
   // Styling helpers
   const borderBottomClass = "border-zen-line-strong";
-  const toolbarPanelClass = "border-zen-line bg-zen-surface/70";
-  const groupChipIdle =
-    "border border-zen-line bg-zen-bg/20 text-zen-fg-muted hover:border-zen-line-strong hover:text-zen-fg-strong";
-  const segmentTrackClass = "border border-zen-line bg-zen-bg/45";
-  const mobilePillClass = "border border-zen-accent/30 bg-zen-accent/10 shadow-none";
 
   const groupTabItems = useMemo(
     () => [
@@ -1288,8 +1310,8 @@ export function NodeTable({
 
   const viewModeTabs = useMemo(
     () => [
-      { id: "list" as const, label: t.list },
-      { id: "card" as const, label: t.card },
+      { id: "list" as const, label: t.list, leading: <Table2 size={19} strokeWidth={1.6} aria-hidden /> },
+      { id: "card" as const, label: t.card, leading: <LayoutGrid size={19} strokeWidth={1.6} aria-hidden /> },
     ],
     [t.list, t.card],
   );
@@ -1303,7 +1325,7 @@ export function NodeTable({
         aria-sort={
           isActive ? (sortOrder === "asc" ? "ascending" : "descending") : "none"
         }
-        className="py-2 px-2 font-black whitespace-nowrap"
+        className="py-2 px-2 font-semibold whitespace-nowrap"
       >
         <button
           type="button"
@@ -1326,7 +1348,7 @@ export function NodeTable({
     );
   };
 
-  const renderStatsBar = (mobileFooter: boolean) => {
+  const renderSortControl = (mobileFooter: boolean) => {
     const placement = mobileFooter ? "mobile" : "desktop";
     const menuOpen = openSortMenu === placement;
     const menuId = `${sortMenuIdPrefix}-${placement}`;
@@ -1341,17 +1363,9 @@ export function NodeTable({
 
     return (
       <div
-        className={`${zenType.label} tracking-[0.2em] ${textMuted} flex flex-wrap justify-between items-center gap-x-4 gap-y-2 uppercase font-mono ${
-          mobileFooter
-            ? "pt-3 border-t border-zen-line-strong"
-            : "sm:items-baseline tracking-[0.25em]"
-        }`}
+        className="km-sort-control"
       >
-        <span>
-          {t.matchingInstances}: {filteredNodes.length} / {nodes.length}
-        </span>
         <div className="flex items-center gap-2 relative z-30">
-          <span>{t.sort}:</span>
           <div className="relative inline-block text-left">
             <button
               type="button"
@@ -1364,11 +1378,13 @@ export function NodeTable({
                   open === placement ? null : placement,
                 )
               }
-              className={`min-h-11 cursor-pointer select-none font-bold flex items-center gap-1 uppercase leading-none transition-[color,transform] duration-300 ease-[cubic-bezier(0.34,1.45,0.64,1)] active:scale-[0.97] ${
+              aria-label={`${t.sort}: ${getFieldLabel(sortField)}`}
+              className={`km-sort-trigger ${zenControl.trigger} ${
                 menuOpen ? "text-zen-accent" : textPrimary
               }`}
             >
-              {getFieldLabel(sortField)}
+              <span>{t.sort}<span className="hidden lg:inline">:</span></span>
+              <span className="km-sort-current">{getFieldLabel(sortField)}</span>
               {sortField !== "default" ? (
                 <span
                   className="normal-case tracking-normal opacity-75 transition-transform duration-300"
@@ -1377,6 +1393,7 @@ export function NodeTable({
                   {getSortOrderIcon(sortOrder)}
                 </span>
               ) : null}
+              <ChevronDown size={16} strokeWidth={1.75} aria-hidden />
             </button>
             {menuOpen && (
               <>
@@ -1439,14 +1456,10 @@ export function NodeTable({
                     }
                     setOpenSortMenu(null);
                   }}
-                  className={`absolute right-0 top-full z-50 w-44 border overflow-hidden ${zenMotion.menuPanel} ${
-                    theme === "dark"
-                      ? "bg-zen-bg border-zen-border-muted text-zen-fg-muted"
-                      : "bg-zen-bg border-zen-border text-zen-fg-strong"
-                  }`}
+                  className={`absolute right-0 top-full z-50 w-48 mt-1 overflow-y-auto overscroll-contain ${zenControl.menu} ${zenMotion.menuPanel}`}
                 >
                   <div
-                    className={`px-2.5 py-1.5 border-b ${zenType.micro} zen-track-tight font-bold ${"border-zen-border-muted text-zen-fg-subtle"}`}
+                    className={`px-2.5 py-1.5 border-b ${zenType.micro} zen-track-tight font-medium ${"border-zen-border-muted text-zen-fg-subtle"}`}
                   >
                     {t.selectSortMetric}
                   </div>
@@ -1473,9 +1486,9 @@ export function NodeTable({
                             }
                             closeAndRestoreFocus();
                           }}
-                          className={`w-full text-left px-3 py-2 md:py-1.5 ${zenType.caption} tracking-wider uppercase font-mono transition-colors flex items-center justify-between ${
+                          className={`${zenControl.item} justify-between ${
                             isCurrent
-                              ? "bg-zen-fill-muted/12 text-zen-accent font-bold"
+                              ? "bg-zen-fill-muted/12 text-zen-accent font-medium"
                               : "hover:bg-zen-fill-muted/10"
                           }`}
                         >
@@ -1510,10 +1523,9 @@ export function NodeTable({
                           ? t.setSortDescending
                           : t.setSortAscending
                       }
-                      className={`w-full min-h-9 text-center px-1 py-1 ${zenType.caption} uppercase font-bold tracking-widest text-zen-accent hover:underline transition-all disabled:cursor-not-allowed disabled:opacity-40`}
+                      className={`${zenControl.item} text-zen-accent disabled:cursor-not-allowed disabled:opacity-40`}
                     >
-                      [ {getSortOrderIcon(sortOrder === "asc" ? "desc" : "asc")}{" "}
-                      ]
+                      {sortOrder === "asc" ? t.setSortDescending : t.setSortAscending}
                     </button>
                   </div>
                 </div>
@@ -1534,183 +1546,103 @@ export function NodeTable({
       ref={nodeDisplayRef}
       className={`km-node-display w-full space-y-6 lg:space-y-8 font-sans ${zenType.body} ${zenText.primary}`}
     >
-      {/* Mobile toolbar card */}
-      <div
-        className={`km-mobile-toolbar space-y-4 lg:hidden rounded-xl border p-4 ${toolbarPanelClass}`}
-      >
+      <div className="km-home-toolbar">
         {showGroupTabs ? (
-          <div className="relative min-w-0">
+          <div className="km-toolbar-groups">
             {groupScrollFade.left ? (
-              <div
-                className={`pointer-events-none absolute inset-y-0 left-0 z-[1] w-3 bg-gradient-to-r ${"from-zen-bg/80"} to-transparent`}
-                aria-hidden
-              />
+              <div className="pointer-events-none absolute inset-y-0 left-0 z-[2] w-3 bg-gradient-to-r from-zen-bg to-transparent" aria-hidden />
             ) : null}
             {groupScrollFade.right ? (
-              <div
-                className={`pointer-events-none absolute inset-y-0 right-0 z-[1] w-5 bg-gradient-to-l ${"from-zen-bg/80"} to-transparent`}
-                aria-hidden
-              />
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-[2] w-4 bg-gradient-to-l from-zen-bg to-transparent" aria-hidden />
             ) : null}
             <ZenTabControl
               ariaLabel={t.lblClusterNodeStatus}
               ref={groupScrollRef}
-              variant="pill"
               scrollable
-              indicatorClassName={mobilePillClass}
               tabs={groupTabItems}
               value={activeGroup}
               onChange={handleGroupChange}
-              tabClassName={`snap-start rounded-full px-3.5 py-1.5 font-mono ${zenType.caption} zen-track-tight font-bold`}
-              activeClassName="font-black text-zen-fg-strong"
-              idleClassName={groupChipIdle}
+              separator={<span>/</span>}
+              tabClassName="font-medium"
+              activeClassName="font-medium text-zen-fg-strong"
+              idleClassName="text-zen-fg-muted hover:text-zen-fg-strong"
             />
           </div>
-        ) : null}
+        ) : <div className="km-toolbar-groups" />}
 
-        <div className="flex flex-col gap-3 font-mono">
-          <div className="flex items-center justify-between gap-3">
-            <span
-              className={`${zenType.label} ${textMuted} shrink-0 tracking-[0.18em] uppercase`}
-            >
-              {t.viewMode}
-            </span>
-            <div
-              className={`inline-flex rounded-full p-0.5 ${segmentTrackClass}`}
-            >
-              <ZenTabControl
-                ariaLabel={t.viewMode}
-                variant="pill"
-                tabs={viewModeTabs}
-                indicatorClassName={mobilePillClass}
-                value={viewMode}
-                onChange={(id) => setViewMode(id as "list" | "card")}
-                tabClassName={`${zenTouch.btn} rounded-full px-3.5 py-1 font-mono ${zenType.caption} zen-track-tight font-bold`}
-                activeClassName="font-black text-zen-fg-strong"
-                idleClassName={`${textMuted} hover:text-zen-accent`}
-                className="gap-0.5"
-              />
-            </div>
-          </div>
-          <div className="relative flex min-w-0 items-center">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => {
+        <div className="km-toolbar-view">
+          <ZenTabControl
+            ariaLabel={t.viewMode}
+            tabs={viewModeTabs}
+            separator={<span className="text-zen-fg-faint">|</span>}
+            value={effectiveViewMode}
+            onChange={(id) => setViewMode(id as "list" | "card")}
+            activeClassName="font-medium text-zen-fg-strong"
+            idleClassName="text-zen-fg-muted hover:text-zen-fg-strong"
+          />
+        </div>
+
+        <div className="km-toolbar-search">
+          <Search size={18} strokeWidth={1.7} aria-hidden />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(event) => {
+              searchEditedRef.current = true;
+              setSearchTerm(event.target.value);
+            }}
+            placeholder={`${t.search}: ...`}
+            aria-label={t.search}
+          />
+          {searchTerm ? (
+            <button
+              type="button"
+              onClick={() => {
                 searchEditedRef.current = true;
-                setSearchTerm(e.target.value);
+                setSearchTerm("");
               }}
-              placeholder={t.search}
-              aria-label={t.search}
-              className={`w-full min-w-0 rounded-md border border-zen-line-strong bg-zen-bg/35 px-3 py-2 transition-[border-color,box-shadow] font-mono ${zenType.body} tracking-wide uppercase ${textPrimary} placeholder:text-zen-fg-muted`}
-            />
-            {searchTerm ? (
-              <button
-                type="button"
-                onClick={() => {
-                  searchEditedRef.current = true;
-                  setSearchTerm("");
-                }}
-                className={`absolute right-2 ${zenInteractive.clear} font-mono ${zenType.caption} cursor-pointer`}
-                aria-label={t.clearSearch}
-              >
-                [X]
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {renderStatsBar(true)}
-      </div>
-
-      {/* Desktop toolbar — original layout */}
-      <div className="hidden lg:flex flex-col gap-8">
-        <div className="flex flex-row items-center justify-between gap-8 py-2">
-          {showGroupTabs ? (
-            <div className="flex h-8 min-w-0 flex-1 items-center overflow-x-auto overscroll-x-contain scroll-smooth pr-2 whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <ZenTabControl
-                ariaLabel={t.lblClusterNodeStatus}
-                tabs={groupTabItems}
-                value={activeGroup}
-                onChange={handleGroupChange}
-                separator={
-                  <span
-                    className={`font-mono font-light ${zenType.caption} ${zenText.faint}/70`}
-                  >
-                    {" / "}
-                  </span>
-                }
-                tabClassName={`font-sans ${zenType.caption} zen-track-tight`}
-                activeClassName={`${textPrimary} font-black`}
-                idleClassName={`${textMuted} hover:text-zen-accent font-bold`}
-                className="h-8 w-max min-w-max flex-nowrap gap-x-2"
-              />
-            </div>
-          ) : (
-            <div className="h-8 min-w-0 flex-1" />
-          )}
-
-          <div className="flex h-8 shrink-0 flex-nowrap items-center gap-x-8 font-mono">
-            <div
-              className={`flex h-8 items-center gap-3 ${zenType.caption} tracking-[0.2em] uppercase`}
+              aria-label={t.clearSearch}
+              className="flex h-9 shrink-0 items-center hover:text-zen-accent"
             >
-              <span className={`${textMuted} shrink-0 leading-none`}>
-                {t.viewMode}:
-              </span>
-              <ZenTabControl
-                ariaLabel={t.viewMode}
-                tabs={viewModeTabs.map((tab) => ({
-                  ...tab,
-                  label: `[ ${tab.label} ]`,
-                }))}
-                value={viewMode}
-                onChange={(id) => setViewMode(id as "list" | "card")}
-                tabClassName="inline-flex items-center leading-none py-0"
-                activeClassName={`${textPrimary} font-bold`}
-                idleClassName={`${textMuted} hover:text-zen-accent`}
-                className="h-8 gap-3"
-              />
-            </div>
-
-            <div className="flex h-8 items-center gap-2">
-              <span
-                className={`${zenType.label} ${textMuted} shrink-0 leading-none tracking-[0.2em] uppercase`}
-              >
-                {t.search}:
-              </span>
-              <div
-                className={`inline-flex items-center gap-1 border-b ${borderBottomClass}`}
-              >
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    searchEditedRef.current = true;
-                    setSearchTerm(e.target.value);
-                  }}
-                  placeholder="..."
-                  aria-label={t.search}
-                  className={`min-w-0 w-40 border-0 bg-transparent py-1 pl-1 pr-0 transition-[color,box-shadow] font-mono ${zenType.body} placeholder:text-zen-fg-faint tracking-wider uppercase ${textPrimary}`}
-                />
-                {searchTerm ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      searchEditedRef.current = true;
-                      setSearchTerm("");
-                    }}
-                    className={`shrink-0 py-1 leading-none ${zenInteractive.clear} font-mono ${zenType.caption} cursor-pointer`}
-                    aria-label={t.clearSearch}
-                  >
-                    [X]
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
+              <X size={16} aria-hidden />
+            </button>
+          ) : null}
         </div>
 
-        {renderStatsBar(false)}
+        <details
+          ref={mobileFilterRef}
+          className="km-toolbar-filter"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }
+          }}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              event.currentTarget.open = false;
+            }
+          }}
+        >
+          <summary>{t.filter}<ChevronDown size={16} strokeWidth={1.75} aria-hidden /></summary>
+          <div className="km-toolbar-filter-panel">
+            <p>{t.matchingInstances}: {filteredNodes.length} / {nodes.length}</p>
+            <ZenTabControl
+              ariaLabel={t.viewMode}
+              tabs={viewModeTabs}
+              value={effectiveViewMode}
+              onChange={(id) => {
+                setViewMode(id as "list" | "card");
+                if (mobileFilterRef.current) mobileFilterRef.current.open = false;
+              }}
+              tabClassName="min-h-11 px-2"
+              activeClassName="font-medium text-zen-fg-strong"
+              idleClassName="text-zen-fg-muted"
+            />
+          </div>
+        </details>
+
+        {renderSortControl(false)}
       </div>
 
       {pagination}
@@ -1723,7 +1655,7 @@ export function NodeTable({
           <table className="km-ui-table w-full min-w-[1100px] text-left border-collapse">
             <thead>
               <tr
-                className={`${textMuted} ${zenType.caption} zen-track-tight uppercase border-b ${borderBottomClass} whitespace-nowrap`}
+                className={`${textMuted} ${zenType.caption} zen-track-tight border-b ${borderBottomClass} whitespace-nowrap`}
               >
                 {renderSortHeader("name", t.name)}
                 {renderSortHeader("os", t.os)}
@@ -1741,9 +1673,9 @@ export function NodeTable({
                 <tr>
                   <td
                     colSpan={listColSpan}
-                    className={`py-16 text-center ${textMuted} italic uppercase tracking-[0.2em] font-sans`}
+                    className="py-8 whitespace-normal font-sans"
                   >
-                    {t.noInstances}
+                    <UIState inline>{t.noInstances}</UIState>
                   </td>
                 </tr>
               ) : (
@@ -1775,9 +1707,9 @@ export function NodeTable({
         >
           {displayedNodes.length === 0 ? (
             <div
-              className={`col-span-full py-16 text-center ${textMuted} italic uppercase tracking-[0.2em] font-sans`}
+              className="col-span-full"
             >
-              {t.noInstances}
+              <UIState>{t.noInstances}</UIState>
             </div>
           ) : (
             displayedNodes.map((node) => (

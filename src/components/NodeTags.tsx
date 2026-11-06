@@ -26,9 +26,9 @@ interface NodeTagsProps {
 }
 
 const SIZE_CLASS = {
-  sm: "zen-type-caption md:tracking-[0.06em]",
-  md: "zen-type-data md:tracking-[0.08em]",
-  header: "text-sm tracking-wide",
+  sm: "zen-type-caption tracking-normal",
+  md: "zen-type-data tracking-normal",
+  header: "text-sm tracking-normal",
 } as const;
 
 const VIEWPORT_PAD = 8;
@@ -76,7 +76,7 @@ function TagLabel({
   return (
     <span
       title={text}
-      className={`shrink-0 font-mono font-semibold leading-none ${sizeClass} ${getTagTextClass(color, index, theme)}`}
+      className={`shrink-0 font-sans font-medium leading-none ${sizeClass} ${getTagTextClass(color, index, theme)}`}
     >
       {text}
     </span>

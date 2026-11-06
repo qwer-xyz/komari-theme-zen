@@ -2,10 +2,11 @@ import { COLOR_PRESETS } from "./presets";
 import type {
   ColorPresetId,
   ColorSchemeOverrides,
+  DetailColorTokens,
   ModeColorTokens,
   ResolvedColorVars,
 } from "./tokens";
-import { CSS_VAR_KEYS, DEFAULT_PRESET_ID } from "./tokens";
+import { CSS_VAR_KEYS, DEFAULT_PRESET_ID, DETAIL_CSS_VAR_KEYS } from "./tokens";
 
 export type ResolveColorSchemeInput = {
   presetId: ColorPresetId;
@@ -94,7 +95,10 @@ export function ensureTextContrast(
   // is light, a case where a one-direction binary search can never converge.
   for (const target of targets) {
     for (let step = 1; step <= 512; step += 1) {
-      const candidate = mix(color, target, step / 512);
+      const mixed = mix(color, target, step / 512);
+      // Score the actual 8-bit output; rounding a passing float afterwards can
+      // otherwise make the color fall below the requested contrast ratio.
+      const candidate = { r: Math.round(mixed.r), g: Math.round(mixed.g), b: Math.round(mixed.b) };
       const score = minContrast(candidate);
       const distance =
         (candidate.r - color.r) ** 2 +
@@ -154,24 +158,46 @@ export function resolveColorScheme({
   const modeTokens: ModeColorTokens = {
     ...(mode === "dark" ? preset.dark : preset.light),
   };
-
   if (mode === "light") {
     if (overrides.bgLight) modeTokens.bg = overrides.bgLight;
     if (overrides.surfaceLight) modeTokens.surface = overrides.surfaceLight;
     if (overrides.accentLight) {
       modeTokens.accent = overrides.accentLight;
-      modeTokens.success = overrides.accentLight;
+      modeTokens.accentMuted = overrides.accentLight;
     }
   } else {
     if (overrides.bgDark) modeTokens.bg = overrides.bgDark;
     if (overrides.surfaceDark) modeTokens.surface = overrides.surfaceDark;
     if (overrides.accentDark) {
       modeTokens.accent = overrides.accentDark;
-      modeTokens.success = overrides.accentDark;
+      modeTokens.accentMuted = overrides.accentDark;
     }
   }
 
-  const textSurfaces = [modeTokens.bg, modeTokens.surface];
+  const bgOverride = mode === "light" ? overrides.bgLight : overrides.bgDark;
+  const surfaceOverride = mode === "light" ? overrides.surfaceLight : overrides.surfaceDark;
+  const accentOverride = mode === "light" ? overrides.accentLight : overrides.accentDark;
+  const fallback = mode === "dark" ? { r: 0, g: 0, b: 0 } : { r: 255, g: 255, b: 255 };
+  const tint = (color: string) => toHex(mix(
+    parseRgb(modeTokens.bg, fallback) ?? fallback,
+    parseRgb(color, fallback) ?? fallback, 0.12,
+  ));
+  const detail: DetailColorTokens = { ...preset.detail[mode] };
+  if (bgOverride) detail.detailBg = bgOverride;
+  if (surfaceOverride) {
+    detail.card = surfaceOverride;
+    modeTokens.elevate = surfaceOverride;
+  }
+  if (accentOverride) {
+    detail.chip = tint(modeTokens.accent);
+    detail.chipFg = modeTokens.accent;
+  }
+
+  const textSurfaces = [
+    modeTokens.bg,
+    modeTokens.surface,
+    detail.detailBg, detail.card,
+  ];
   for (const key of [
     "fg",
     "fgStrong",
@@ -186,6 +212,7 @@ export function resolveColorScheme({
   ] as const) {
     modeTokens[key] = ensureTextContrast(modeTokens[key], textSurfaces, mode);
   }
+  if (accentOverride) detail.chipFg = modeTokens.accent;
 
   const vars = modeTokensToVars(modeTokens);
 
@@ -199,6 +226,16 @@ export function resolveColorScheme({
   vars[CSS_VAR_KEYS.chartNetOut] = chartColor(preset.charts.chartNetOut);
   vars[CSS_VAR_KEYS.chartTcp] = chartColor(preset.charts.chartTcp);
   vars[CSS_VAR_KEYS.chartUdp] = chartColor(preset.charts.chartUdp);
+
+  // These colors also label chart values, so they need text contrast.
+  const fills = new Set(["detailBg", "card", "cardLine", "chip", "onlineBg"]);
+  for (const key of Object.keys(DETAIL_CSS_VAR_KEYS) as Array<keyof typeof DETAIL_CSS_VAR_KEYS>) {
+    const surfaces = key === "chipFg" ? [detail.chip]
+      : key === "online" ? [detail.onlineBg] : textSurfaces;
+    vars[DETAIL_CSS_VAR_KEYS[key]] = fills.has(key)
+      ? detail[key]
+      : ensureTextContrast(detail[key], surfaces, mode);
+  }
 
   return vars;
 }

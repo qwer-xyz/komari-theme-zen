@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, test } from "node:test";
 import { createServer } from "vite";
 
@@ -20,6 +21,8 @@ const rpc2 = await vite.ssrLoadModule("/src/lib/rpc2.ts");
 const colorScheme = await vite.ssrLoadModule(
   "/src/lib/colorScheme/resolveScheme.ts",
 );
+const colorSchemeSettings = await vite.ssrLoadModule("/src/lib/colorScheme/fromTheme.ts");
+const colorSchemeApplication = await vite.ssrLoadModule("/src/lib/colorScheme/applyScheme.ts");
 const sanitizeHtml = await vite.ssrLoadModule("/src/lib/sanitizeHtml.ts");
 const dashboardTrend = await vite.ssrLoadModule("/src/lib/dashboardTrend.ts");
 const fontScheme = await vite.ssrLoadModule(
@@ -32,6 +35,29 @@ const liveGpu = await vite.ssrLoadModule("/src/lib/liveGpu.ts");
 const residual = await vite.ssrLoadModule("/src/lib/residualValue.ts");
 const billingDisplay = await vite.ssrLoadModule("/src/lib/billingDisplay.ts");
 const timeRangePresets = await vite.ssrLoadModule("/src/lib/timeRangePresets.ts");
+const themeSettings = await vite.ssrLoadModule("/src/hooks/useThemeSettings.ts");
+const nodeSort = await vite.ssrLoadModule("/src/lib/nodeSort.ts");
+const colorPresets = await vite.ssrLoadModule("/src/lib/colorScheme/presets.ts");
+const chartTooltip = await vite.ssrLoadModule("/src/lib/chartTooltip.ts");
+
+test("chart tooltips stay visible at phone viewport edges and after scrolling", () => {
+  const viewport = { width: 320, height: 568 };
+  const tooltip = { width: 270, height: 160 };
+  for (const top of [-100, 0, 200, 550, 700]) {
+    for (const left of [-20, 0, 200]) {
+      for (const xRatio of [0, 0.5, 1]) {
+        for (const yRatio of [0, 0.5, 1]) {
+          const position = chartTooltip.chartTooltipPosition({ left, top, width: 290, height: 200 }, tooltip, viewport, xRatio, yRatio);
+          assert(position.left >= 12 && position.left + tooltip.width <= viewport.width - 12);
+          assert(position.top >= 12 && position.top + tooltip.height <= viewport.height - 12);
+        }
+      }
+    }
+  }
+  const leftEdge = chartTooltip.chartTooltipPosition({ left: 0, top: 200, width: 320, height: 100 }, tooltip, viewport, 0, 0.5);
+  const rightEdge = chartTooltip.chartTooltipPosition({ left: 0, top: 200, width: 320, height: 100 }, tooltip, viewport, 1, 0.5);
+  assert(leftEdge.left < rightEdge.left);
+});
 
 const billingLabels = {
   unitDays: "天",
@@ -495,7 +521,7 @@ test("numeric helpers reject invalid telemetry and clamp percentages", () => {
 
 test("custom themes keep text readable across mixed light and dark surfaces", () => {
   for (const mode of ["light", "dark"]) {
-    const defaults = colorScheme.resolveColorScheme({ presetId: "Warm", mode });
+    const defaults = colorScheme.resolveColorScheme({ presetId: "Kumo", mode });
     for (const key of [
       "--zen-fg",
       "--zen-fg-strong",
@@ -527,7 +553,7 @@ test("custom themes keep text readable across mixed light and dark surfaces", ()
   }
 
   const custom = colorScheme.resolveColorScheme({
-    presetId: "Warm",
+    presetId: "Kumo",
     mode: "light",
     overrides: { bgLight: "#000000", surfaceLight: "#ffffff" },
   });
@@ -539,6 +565,181 @@ test("custom themes keep text readable across mixed light and dark surfaces", ()
     assert.ok(hexContrast(custom[key], "#000000") >= 2.98);
     assert.ok(hexContrast(custom[key], "#ffffff") >= 2.98);
   }
+});
+
+test("Kumo keeps text and chart labels readable across its surface hierarchy", () => {
+  assert.equal(colorScheme.normalizePresetId("Kumo"), "Kumo");
+  assert.equal(colorSchemeSettings.colorSchemeFromTheme({ colorPreset: "Kumo" }).presetId, "Kumo");
+  for (const mode of ["light", "dark"]) {
+    const vars = colorScheme.resolveColorScheme({ presetId: "Kumo", mode });
+    const surfaces = ["--zen-bg", "--zen-surface", "--zen-detail-bg", "--zen-card"];
+    const text = [
+      "--zen-fg", "--zen-fg-strong", "--zen-fg-muted", "--zen-fg-subtle", "--zen-fg-faint",
+      "--zen-accent", "--zen-success", "--zen-warning", "--zen-danger", "--zen-chip-fg",
+      "--zen-series-cpu", "--zen-series-mem", "--zen-series-disk", "--zen-series-swap",
+      "--zen-series-net-in", "--zen-series-net-out", "--zen-latency-1", "--zen-latency-2", "--zen-latency-3",
+    ];
+    for (const key of text) {
+      for (const surface of surfaces) {
+        assert.ok(hexContrast(vars[key], vars[surface]) >= 4.48, `${mode} ${key} on ${surface}`);
+      }
+    }
+    assert.ok(hexContrast(vars["--zen-online"], vars["--zen-online-bg"]) >= 4.48);
+    assert.ok(hexContrast(vars["--zen-chip-fg"], vars["--zen-chip"]) >= 4.48);
+    assert.notEqual(vars["--zen-accent"], vars["--zen-success"]);
+  }
+});
+
+test("named palettes preserve Kumo and A\\ selections and expose all four choices", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../komari-theme.json", import.meta.url), "utf8"));
+  const picker = manifest.configuration.data.find(field => field.key === "colorPreset");
+  assert.deepEqual(picker.options.split(","), ["中性白", "柔暖色", "科技蓝", "薄荷绿"]);
+  assert.equal(picker.default, "中性白");
+  assert.equal(colorSchemeSettings.colorSchemeFromTheme({ colorPreset: "A\\" }).presetId, "Anthropic");
+  assert.equal(colorSchemeSettings.colorSchemeFromTheme({}).presetId, "Kumo");
+  for (const [label, id] of [["中性白", "Kumo"], ["柔暖色", "Anthropic"], ["科技蓝", "Carbon"], ["薄荷绿", "Supabase"], ["Kumo", "Kumo"], ["Anthropic", "Anthropic"]]) {
+    assert.equal(colorSchemeSettings.colorSchemeFromTheme({ colorPreset: label }).presetId, id);
+  }
+});
+
+test("four palettes keep text and chart values readable in both modes", () => {
+  for (const presetId of Object.keys(colorPresets.COLOR_PRESETS)) {
+  for (const mode of ["light", "dark"]) {
+    const vars = colorScheme.resolveColorScheme({ presetId, mode });
+    for (const key of ["--zen-fg", "--zen-fg-strong", "--zen-fg-muted", "--zen-fg-subtle", "--zen-fg-faint", "--zen-accent", "--zen-series-cpu", "--zen-series-mem", "--zen-series-disk", "--zen-series-swap", "--zen-series-net-in", "--zen-series-net-out"]) {
+      for (const surface of ["--zen-bg", "--zen-surface", "--zen-detail-bg", "--zen-card"]) {
+        assert.ok(hexContrast(vars[key], vars[surface]) >= 4.5, `${presetId} ${mode} ${key} on ${surface}`);
+      }
+    }
+    assert.ok(hexContrast(vars["--zen-chip-fg"], vars["--zen-chip"]) >= 4.5);
+    assert.ok(hexContrast(vars["--zen-online"], vars["--zen-online-bg"]) >= 4.5);
+    assert.notEqual(vars["--zen-series-net-in"], vars["--zen-series-net-out"]);
+    assert.notEqual(vars["--zen-success"], vars["--zen-accent"]);
+    assert.notEqual(vars["--zen-bg"], vars["--zen-card"]);
+  }
+  }
+});
+
+test("Kumo custom surfaces reach detail cards and preserve status meaning", () => {
+  const vars = colorScheme.resolveColorScheme({
+    presetId: "Kumo", mode: "light",
+    overrides: { bgLight: "#eeeeee", surfaceLight: "#f8f8f8", accentLight: "#7c3aed" },
+  });
+  assert.equal(vars["--zen-detail-bg"], "#eeeeee");
+  assert.equal(vars["--zen-card"], "#f8f8f8");
+  assert.notEqual(vars["--zen-success"], vars["--zen-accent"]);
+  assert.ok(hexContrast(vars["--zen-fg-muted"], vars["--zen-card"]) >= 4.48);
+});
+
+test("switching from Kumo applies the destination detail palette without clearing font settings", () => {
+  const previousDocument = globalThis.document;
+  const styles = new Map([["--font-sans", "user-font"]]);
+  globalThis.document = {
+    documentElement: { style: {
+      setProperty: (key, value) => styles.set(key, value),
+      removeProperty: (key) => styles.delete(key),
+    } },
+  };
+  try {
+    colorSchemeApplication.applyColorScheme(colorScheme.resolveColorScheme({ presetId: "Kumo", mode: "light" }));
+    assert.ok(styles.has("--zen-card"));
+    colorSchemeApplication.applyColorScheme(colorScheme.resolveColorScheme({ presetId: "Anthropic", mode: "dark" }));
+    assert.equal(styles.get("--zen-card"), "#26241f");
+    assert.notEqual(styles.get("--zen-series-cpu"), "#4290f0");
+    assert.equal(styles.get("--font-sans"), "user-font");
+    assert.equal(styles.get("--zen-bg"), "#1c1b19");
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
+});
+
+test("every palette covers detail pages and keeps custom accents separate from status colors", () => {
+  for (const presetId of Object.keys(colorPresets.COLOR_PRESETS)) {
+    for (const mode of ["light", "dark"]) {
+      const base = colorScheme.resolveColorScheme({ presetId, mode });
+      for (const key of ["--zen-detail-bg", "--zen-card", "--zen-chip", "--zen-chip-fg", "--zen-online-bg", "--zen-online", "--zen-series-cpu", "--zen-series-net-in"]) {
+        assert.ok(base[key], `${presetId} ${mode} missing ${key}`);
+      }
+      const custom = colorScheme.resolveColorScheme({ presetId, mode, overrides: mode === "light"
+        ? { bgLight: "#f4f4f4", surfaceLight: "#fafafa", accentLight: "#7030a0" }
+        : { bgDark: "#101010", surfaceDark: "#202020", accentDark: "#ccaaff" } });
+      assert.equal(custom["--zen-detail-bg"], custom["--zen-bg"]);
+      assert.equal(custom["--zen-card"], custom["--zen-surface"]);
+      assert.equal(custom["--zen-elevate"], custom["--zen-surface"]);
+      assert.equal(custom["--zen-chip-fg"], custom["--zen-accent"]);
+      assert.notEqual(custom["--zen-success"], custom["--zen-accent"]);
+      assert.ok(hexContrast(custom["--zen-fg-muted"], custom["--zen-card"]) >= 4.48);
+      assert.ok(hexContrast(custom["--zen-chip-fg"], custom["--zen-chip"]) >= 4.48);
+      assert.ok(hexContrast(custom["--zen-online"], custom["--zen-online-bg"]) >= 4.48);
+    }
+  }
+});
+
+test("retired palette values fall back to Kumo and have no palette definitions", () => {
+  assert.deepEqual(Object.keys(colorPresets.COLOR_PRESETS).sort(), ["Anthropic", "Carbon", "Kumo", "Supabase"]);
+  for (const value of ["Warm", "Red", "Yellow", "Green", "Blue", "Purple", "Mono", "暖色", "红色", "黄色", "绿色", "蓝色", "紫色", "黑白"]) {
+    assert.equal(colorSchemeSettings.colorSchemeFromTheme({ colorPreset: value }).presetId, "Kumo");
+    for (const mode of ["light", "dark"]) {
+      assert.deepEqual(colorScheme.resolveColorScheme({ presetId: value, mode }), colorScheme.resolveColorScheme({ presetId: "Kumo", mode }));
+    }
+  }
+});
+
+test("compact settings expose 18 controls while existing custom settings remain readable", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../komari-theme.json", import.meta.url), "utf8"));
+  const fields = manifest.configuration.data;
+  assert.equal(fields.filter(field => field.key).length, 18);
+  assert.deepEqual(fields.filter(field => field.type === "title").map(field => field.name["zh-CN"]), ["通用", "延迟检测", "外观", "页脚"]);
+  const legacy = {
+    dashboardOverviewLayout: "经典布局 Classic", dashboardOverviewSections: "仅详细统计 Stats",
+    dashboardCpuMetric: "最大值", dashboardBandwidthMetric: "最大值", dashboardNodeIds: '["old-node"]',
+    defaultSortOrder: "降序", logoShape: "方形", showAutoRenewal: false,
+    customBgLight: "#123456", customSurfaceDark: "#223344",
+    fontPreset: "自定义", fontFamilyCustom: "Existing Font", fontCssUrlCustom: "https://example.invalid/font.css",
+    latencyFixedGreenMax: 80, latencyFixedYellowMax: 160, latencyMeanGreenDelta: 7, latencyMeanYellowDelta: 25,
+  };
+  const parsed = themeSettings.parseThemeSettings({ ...legacy, showLatency: false, showExpiryTime: false });
+  assert.equal(parsed.dashboardOverviewLayout, "Classic");
+  assert.equal(parsed.dashboardOverviewSections, "Stats");
+  assert.equal(parsed.dashboardCpuMetric, "Max");
+  assert.equal(parsed.dashboardBandwidthMetric, "Max");
+  assert.deepEqual(parsed.dashboardNodeIds, ["old-node"]);
+  assert.equal(parsed.defaultSortOrder, "Descending");
+  assert.equal(parsed.logoShape, "Square");
+  assert.equal(parsed.showAutoRenewal, false);
+  assert.equal(parsed.colorScheme.overrides.bgLight, "#123456");
+  assert.equal(parsed.colorScheme.overrides.surfaceDark, "#223344");
+  assert.equal(parsed.fontScheme.customFamily, "Existing Font");
+  assert.equal(parsed.fontScheme.presetId, "Custom");
+  assert.equal(parsed.fontScheme.customCssUrl, legacy.fontCssUrlCustom);
+  assert.equal(parsed.latencyColorConfig.fixedGreenMax, 80);
+  assert.equal(parsed.latencyColorConfig.fixedYellowMax, 160);
+  assert.equal(parsed.latencyColorConfig.meanGreenDelta, 7);
+  assert.equal(parsed.latencyColorConfig.meanYellowDelta, 25);
+  assert.equal(parsed.showLatency, false);
+  assert.equal(parsed.showExpiryTime, false);
+  const fresh = themeSettings.parseThemeSettings({});
+  assert.equal(fresh.dashboardOverviewLayout, "Panel");
+  assert.equal(fresh.dashboardOverviewSections, "All");
+  assert.equal(fresh.dashboardCpuMetric, "Average");
+  assert.equal(fresh.dashboardBandwidthMetric, "Total");
+  assert.equal(fresh.showAutoRenewal, true);
+});
+
+test("offline priority survives metric sorting and Keep allows the chosen order", () => {
+  const nodes = [
+    { id: "online-a", online: true, name: "A", cpuUsage: 20 },
+    { id: "offline", online: false, name: "B", cpuUsage: 0 },
+    { id: "online-c", online: true, name: "C", cpuUsage: 10 },
+  ];
+  for (const field of ["name", "cpu"]) {
+    for (const direction of ["asc", "desc"]) {
+      assert.equal(nodeSort.sortNodeList(nodes, field, direction, billingLabels, "First")[0].id, "offline");
+      assert.equal(nodeSort.sortNodeList(nodes, field, direction, billingLabels, "Last").at(-1).id, "offline");
+    }
+  }
+  assert.deepEqual(nodeSort.sortNodeList(nodes, "name", "asc", billingLabels, "Keep").map(node => node.id), ["online-a", "offline", "online-c"]);
 });
 
 test("footer links reject executable URL schemes", () => {
@@ -562,6 +763,36 @@ test("dashboard trends drop records without a reasonable source timestamp", () =
     ]),
     [],
   );
+});
+
+test("dashboard trends expire samples outside the recent three-minute window", () => {
+  const endMs = Date.parse("2026-11-06T05:00:00Z");
+  const histories = new Map([
+    ["first", [
+      { t: endMs - 181_000, cpu: 100, bandwidth: 900_000 },
+      { t: endMs - 175_000, cpu: 10, bandwidth: 100 },
+      { t: endMs - 85_000, cpu: 30, bandwidth: 300 },
+    ]],
+    ["second", [
+      { t: endMs - 175_000, cpu: 20, bandwidth: 200 },
+      { t: endMs - 85_000, cpu: 50, bandwidth: 500 },
+    ]],
+  ]);
+  const current = new Map([
+    ["first", { t: endMs, cpu: 60, bandwidth: 600 }],
+    ["second", { t: endMs, cpu: 80, bandwidth: 800 }],
+  ]);
+  const series = dashboardTrend.aggregateDashboardTrends(histories, current, {
+    cpuMetric: "Average", bandwidthMetric: "Total", endMs, bucketCount: 6,
+  });
+  assert.deepEqual(series.cpu, [15, null, null, 40, null, 70]);
+  assert.deepEqual(series.bandwidth, [300, null, null, 800, null, 1400]);
+
+  const maxima = dashboardTrend.aggregateDashboardTrends(histories, current, {
+    cpuMetric: "Max", bandwidthMetric: "Max", endMs, bucketCount: 6,
+  });
+  assert.deepEqual(maxima.cpu, [20, null, null, 50, null, 80]);
+  assert.deepEqual(maxima.bandwidth, [200, null, null, 500, null, 800]);
 });
 
 test("query keys are stable for objects with different property order", () => {

@@ -21,6 +21,7 @@ import { zenType } from "@/lib/typography";
 import { zenBorder, zenInteractive, zenText } from "@/lib/zenSemantics";
 import { sanitizeFooterHtml } from "@/lib/sanitizeHtml";
 import { usePublicInfo } from "@/contexts/PublicInfoContext";
+import { UIState } from "@/components/UIState";
 
 export function AppLayout() {
   useSiteMeta();
@@ -82,10 +83,12 @@ export function AppLayout() {
   if (!isPluginPage && isLoading) {
     return (
       <div
-        className={`min-h-screen px-4 pt-4 pb-5 sm:px-6 sm:pt-6 sm:pb-6 md:px-12 md:pt-12 md:pb-8 antialiased ${bgClass}`}
+        className={`km-layout ${isDetail ? "" : "km-layout-home"} min-h-screen px-4 pt-4 pb-5 sm:px-6 sm:pt-6 sm:pb-6 md:px-12 md:pt-12 md:pb-8 antialiased ${bgClass}`}
+        aria-busy="true"
+        aria-label={t.loading}
       >
         <div className="mx-auto w-full max-w-[1600px] @container">
-          <DashboardSkeleton theme={theme} />
+          <DashboardSkeleton theme={theme} view={isDetail ? "detail" : "dashboard"} />
         </div>
       </div>
     );
@@ -96,21 +99,9 @@ export function AppLayout() {
       <div
         className={`min-h-screen flex flex-col items-center justify-center gap-3 font-mono text-sm p-8 ${bgClass}`}
       >
-        <span className="text-red-400">
-          {t.errorLoadNodes} {error}
-        </span>
-        {import.meta.env.DEV ? (
-          <span className={`${zenType.caption} ${textMutedClass}`}>
-            {t.errorCheckEnv}
-          </span>
-        ) : null}
-        <button
-          type="button"
-          onClick={refreshNodes}
-          className={`rounded-md border px-3 py-2 ${zenBorder.default} text-zen-fg-strong hover:border-zen-accent hover:text-zen-accent`}
-        >
-          {t.retry}
-        </button>
+        <UIState tone="warning" action={{ label: t.retry, onClick: refreshNodes }}>
+          {t.errorLoadNodes.replace(/[:：]\s*$/, "")}
+        </UIState>
       </div>
     );
   }
@@ -119,7 +110,7 @@ export function AppLayout() {
 
   return (
     <div
-      className={`km-layout min-h-screen px-4 pt-4 pb-5 sm:px-6 sm:pt-6 sm:pb-6 md:px-12 md:pt-12 md:pb-8 antialiased transition-colors duration-300 ${bgClass}`}
+      className={`km-layout ${isDetail ? "" : "km-layout-home"} min-h-screen px-4 pt-4 pb-5 sm:px-6 sm:pt-6 sm:pb-6 md:px-12 md:pt-12 md:pb-8 antialiased transition-colors duration-300 ${bgClass}`}
     >
       <a
         href="#main-content"
@@ -132,7 +123,7 @@ export function AppLayout() {
           className={`transition-[gap] duration-500 ease-out ${
             isDetail
               ? "space-y-4 md:space-y-5"
-              : "space-y-7 md:space-y-9 lg:space-y-10"
+              : "space-y-6 lg:space-y-11"
           }`}
         >
           <ConsoleHeader
@@ -147,29 +138,14 @@ export function AppLayout() {
           />
 
           {!isPluginPage && publicInfoError ? (
-            <div
-              role="status"
-              className={`flex flex-wrap items-center justify-between gap-2 rounded-md border border-zen-warning/40 bg-zen-warning/10 px-3 py-2 font-mono ${zenType.caption} text-zen-fg-strong`}
-              title={publicInfoError}
-            >
-              <span>{t.errorLoadPublicInfo}</span>
-              <button
-                type="button"
-                onClick={refreshPublicInfo}
-                className="rounded border border-zen-border px-2 py-1 hover:border-zen-accent hover:text-zen-accent"
-              >
-                {t.retry}
-              </button>
-            </div>
+            <UIState compact tone="warning" action={{ label: t.retry, onClick: refreshPublicInfo }}>
+              {t.errorLoadPublicInfo.replace(/[:：]\s*$/, "")}
+            </UIState>
           ) : null}
 
           {!isPluginPage &&
           (liveStatus === "stale" || liveStatus === "error") ? (
-            <div
-              role="status"
-              className={`flex flex-wrap items-center justify-between gap-2 rounded-md border border-zen-warning/40 bg-zen-warning/10 px-3 py-2 font-mono ${zenType.caption} text-zen-fg-strong`}
-              title={liveError ?? undefined}
-            >
+            <UIState compact tone="warning">
               <span>
                 {liveStatus === "stale"
                   ? t.liveDataStale
@@ -182,25 +158,13 @@ export function AppLayout() {
                     }).format(lastSuccessAt)}`
                   : ""}
               </span>
-            </div>
+            </UIState>
           ) : null}
 
           {!isPluginPage && error && nodes.length > 0 ? (
-            <div
-              role="status"
-              className={`flex flex-wrap items-center justify-between gap-2 rounded-md border ${zenBorder.default} bg-zen-elevate/20 px-3 py-2 font-mono ${zenType.caption} text-zen-fg-strong`}
-            >
-              <span>
-                {t.errorLoadNodes} {error}
-              </span>
-              <button
-                type="button"
-                onClick={refreshNodes}
-                className="rounded border border-zen-border px-2 py-1 hover:border-zen-accent hover:text-zen-accent"
-              >
-                {t.retry}
-              </button>
-            </div>
+            <UIState compact tone="warning" action={{ label: t.retry, onClick: refreshNodes }}>
+              {t.errorLoadNodes.replace(/[:：]\s*$/, "")}
+            </UIState>
           ) : null}
 
           <main

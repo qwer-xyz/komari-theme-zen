@@ -38,12 +38,13 @@ export function sortNodeList(
   sortField: NodeSortField,
   sortOrder: NodeSortOrder,
   billingLabels: BillingLabels,
+  offlinePosition = "Last",
 ): VPSNode[] {
   if (sortField === "default") return nodes;
 
   return [...nodes].sort((a, b) => {
-    if (a.online !== b.online) {
-      return a.online ? -1 : 1;
+    if (a.online !== b.online && offlinePosition !== "Keep") {
+      return (a.online ? -1 : 1) * (offlinePosition === "First" ? -1 : 1);
     }
 
     let valA: string | number = "";

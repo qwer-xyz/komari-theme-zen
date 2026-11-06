@@ -6,6 +6,8 @@
 import { sampleGpuRecords } from "@/lib/sampleGpuRecords";
 import { liveGpuDeviceAt, resolveGpuReading } from "@/lib/liveGpu";
 import { HistoryError } from "@/components/SectionErrorBoundary";
+import { ChartTooltip } from "@/components/ChartTooltip";
+import { UIState } from "@/components/UIState";
 import React from "react";
 import { Link } from "react-router-dom";
 import {
@@ -42,6 +44,7 @@ import {
 import {
   detailHistoryHours,
   formatChartOffsetLabel,
+  formatChartPointTime,
 } from "@/lib/timeRangePresets";
 import {
   formatBytesPerSec,
@@ -369,9 +372,9 @@ function niceCeil(value: number): number {
 }
 
 const detailCardClass =
-  "rounded-2xl border border-zen-card-line bg-zen-card px-4 py-3.5 sm:px-5 sm:py-4";
+  "zen-panel px-4 py-3.5 sm:px-5 sm:py-4";
 const chartCardClass =
-  "rounded-2xl border border-zen-card-line bg-zen-card px-3.5 py-3 sm:px-4 sm:py-3.5";
+  "zen-panel px-3.5 py-3 sm:px-4 sm:py-3.5";
 const detailTitleClass =
   "text-sm font-semibold leading-none text-zen-fg-strong";
 
@@ -420,6 +423,7 @@ const MiniLineChart = ({
   icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const chartId = React.useId();
 
   const rawMax = React.useMemo(
     () =>
@@ -508,6 +512,7 @@ const MiniLineChart = ({
 
   const {
     hoveredIndex,
+    setHoveredIndex,
     onMouseMove,
     onMouseLeave,
     onTouchStart,
@@ -582,8 +587,7 @@ const MiniLineChart = ({
 
   const gridLines = React.useMemo(() => [0, 0.5, 1], []);
 
-  const strokeColor =
-    theme === "dark" ? "rgba(250, 249, 245, 0.08)" : "rgba(48, 48, 46, 0.08)";
+  const strokeColor = "var(--zen-line)";
 
   const isHovering = hoveredIndex !== null;
   const lastIdx1 = lastValidIndex(chartData);
@@ -600,11 +604,7 @@ const MiniLineChart = ({
   const hoverTs = timestamps?.[activeIdx];
   const hoverLabel =
     hoverTs != null
-      ? (() => {
-          const d = new Date(hoverTs);
-          const p = (n: number) => String(n).padStart(2, "0");
-          return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-        })()
+      ? formatChartPointTime(new Date(hoverTs).toISOString(), timeRange)
       : formatChartOffsetLabel(
           chartData.length - 1 - activeIdx,
           timeRange,
@@ -633,7 +633,7 @@ const MiniLineChart = ({
     ...(activeExtraYs.length ? activeExtraYs : [activeY1]),
   );
 
-  const safeId = title.replace(/[^a-zA-Z0-9]/g, "_");
+  const safeId = chartId.replace(/[^a-zA-Z0-9_-]/g, "_");
 
   const secondMuted =
     displayVal2 != null && Number.isFinite(displayVal2) && displayVal2 === 0;
@@ -677,8 +677,8 @@ const MiniLineChart = ({
           ))}
         </div>
         {!hasData ? (
-          <div className="flex h-24 flex-1 items-center justify-center text-sm text-zen-fg-muted">
-            {messages.noHistory}
+          <div className="flex h-24 flex-1 items-center justify-center">
+            <UIState inline>{messages.noHistory}</UIState>
           </div>
         ) : (
           <div
@@ -688,6 +688,19 @@ const MiniLineChart = ({
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
+            tabIndex={0}
+            role="group"
+            aria-label={title}
+            aria-describedby={isHovering ? `${safeId}-tooltip` : undefined}
+            onFocus={() => setHoveredIndex(Math.max(0, lastIdx1))}
+            onBlur={() => setHoveredIndex(null)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") { setHoveredIndex(null); return; }
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const last = chartData.length - 1;
+              setHoveredIndex(event.key === "Home" ? 0 : event.key === "End" ? last : Math.max(0, Math.min(last, activeIdx + (event.key === "ArrowLeft" ? -1 : 1))));
+            }}
             className="relative min-w-0 flex-1 cursor-crosshair touch-pan-y"
           >
             <svg
@@ -831,21 +844,7 @@ const MiniLineChart = ({
             )}
 
             {isHovering && (
-              <div
-                className={`absolute z-10 pointer-events-none px-2 py-1.5 rounded shadow-lg border ${zenType.caption} font-mono flex flex-col gap-0.5 select-none max-w-[min(280px,calc(100vw-2rem))] ${
-                  theme === "dark"
-                    ? "bg-zen-surface border-zen-border-muted text-zen-fg-strong"
-                    : "bg-zen-surface border-zen-border text-zen-fg-strong"
-                }`}
-                style={{
-                  left: `${(activeX / width) * 100}%`,
-                  top: `${(minY / height) * 100}%`,
-                  transform:
-                    activeX / width > 0.55
-                      ? "translate(-102%, -125%)"
-                      : "translate(8%, -125%)",
-                }}
-              >
+              <ChartTooltip id={`${safeId}-tooltip`} anchorRef={containerRef} xRatio={activeX / width} yRatio={minY / height} timeLabel={hoverLabel}>
                 <div className="flex items-center gap-4 whitespace-nowrap justify-between">
                   <span className="flex items-center gap-1">
                     <span
@@ -854,7 +853,7 @@ const MiniLineChart = ({
                     ></span>
                     <span>{label1}:</span>
                   </span>
-                  <span className="font-bold text-zen-fg-strong">
+                  <span className="font-mono font-medium tabular-nums text-zen-fg-strong">
                     {formatDisplay(displayVal1)}
                   </span>
                 </div>
@@ -867,7 +866,7 @@ const MiniLineChart = ({
                       ></span>
                       <span>{label2 || "VALUE 2"}:</span>
                     </span>
-                    <span className="font-bold text-zen-fg-strong">
+                    <span className="font-mono font-medium tabular-nums text-zen-fg-strong">
                       {formatDisplay(displayVal2)}
                     </span>
                   </div>
@@ -890,13 +889,13 @@ const MiniLineChart = ({
                         />
                         <span>{layer.label}:</span>
                       </span>
-                      <span className="font-bold text-zen-fg-strong">
+                      <span className="font-mono font-medium tabular-nums text-zen-fg-strong">
                         {shown}
                       </span>
                     </div>
                   );
                 })}
-              </div>
+              </ChartTooltip>
             )}
           </div>
         )}
@@ -912,7 +911,7 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
   const { recordEnabled, loadMaxHours, pingMaxHours, loadPresets, pingPresets } =
     useRecordSettings();
   const { status: liveDataStatus } = useLiveData();
-  const { pingTaskIds } = useThemeSettings();
+  const { pingTaskIds, showLatency, showExpiryTime } = useThemeSettings();
   const loadHistoryHours = React.useMemo(
     () => detailHistoryHours(loadMaxHours, loadPresets),
     [loadMaxHours, loadPresets],
@@ -1288,12 +1287,12 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
           <SpecRow label={t.lblLastUpdated}>
             {formatUpdatedAt(node.updatedAt)}
           </SpecRow>
-          {hasExpiry ? (
+          {showExpiryTime && hasExpiry ? (
             <SpecRow label={t.lblExpiredAt}>
               <span className={expiryValueClass}>{expiryLabel}</span>
             </SpecRow>
           ) : null}
-          {priceText ? (
+          {showExpiryTime && priceText ? (
             <SpecRow label={t.lblRenewalPrice}>{priceText}</SpecRow>
           ) : null}
         </div>
@@ -1708,7 +1707,7 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
             </div>
           </DetailSection>
 
-          {recordEnabled ? (
+          {recordEnabled && showLatency ? (
             <DetailSection delay={160}>
               <section className={detailCardClass}>
                 <LatencyProbePanel
@@ -1744,17 +1743,9 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
       ) : (
         <DetailSection delay={60} className="space-y-3">
           {hardwareCard}
-          <section className={`${detailCardClass} py-10 text-center`}>
-            <p className="text-base font-semibold text-zen-danger/80">
-              {t.vpsHostOffline}
-            </p>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zen-fg-muted">
-              {t.hostOfflineWarning}
-            </p>
-            <p className="mt-2 text-xs text-zen-fg-faint">
-              {t.msgNodeOfflineAwaiting}
-            </p>
-          </section>
+          <UIState tone="offline" detail={<>{t.hostOfflineWarning}<p className="mt-1 text-xs text-zen-fg-faint">{t.msgNodeOfflineAwaiting}</p></>}>
+            {t.vpsHostOffline}
+          </UIState>
         </DetailSection>
       )}
     </div>

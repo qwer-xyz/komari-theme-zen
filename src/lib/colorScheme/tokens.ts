@@ -1,11 +1,4 @@
-export type ColorPresetId =
-  | "Warm"
-  | "Red"
-  | "Yellow"
-  | "Green"
-  | "Blue"
-  | "Purple"
-  | "Mono";
+export type ColorPresetId = "Kumo" | "Anthropic" | "Carbon" | "Supabase";
 
 export type ModeColorTokens = {
   bg: string;
@@ -43,7 +36,36 @@ export type ColorPreset = {
   light: ModeColorTokens;
   dark: ModeColorTokens;
   charts: ChartColorTokens;
+  detail: {
+    light: DetailColorTokens;
+    dark: DetailColorTokens;
+  };
 };
+
+export const DETAIL_CSS_VAR_KEYS = {
+  detailBg: "--zen-detail-bg",
+  card: "--zen-card",
+  cardLine: "--zen-card-line",
+  online: "--zen-online",
+  onlineBg: "--zen-online-bg",
+  chip: "--zen-chip",
+  chipFg: "--zen-chip-fg",
+  seriesCpu: "--zen-series-cpu",
+  seriesMem: "--zen-series-mem",
+  seriesDisk: "--zen-series-disk",
+  seriesSwap: "--zen-series-swap",
+  seriesNetIn: "--zen-series-net-in",
+  seriesNetOut: "--zen-series-net-out",
+  seriesTcp: "--zen-series-tcp",
+  seriesUdp: "--zen-series-udp",
+  seriesProc: "--zen-series-proc",
+  latency1: "--zen-latency-1",
+  latency2: "--zen-latency-2",
+  latency3: "--zen-latency-3",
+  latency4: "--zen-latency-4",
+} as const;
+
+export type DetailColorTokens = Record<keyof typeof DETAIL_CSS_VAR_KEYS, string>;
 
 /** Flat CSS custom-property map applied to :root / .dark. */
 export type ResolvedColorVars = Record<string, string>;
@@ -86,14 +108,12 @@ export const CSS_VAR_KEYS = {
   chartUdp: "--zen-chart-udp",
 } as const;
 
-export const DEFAULT_PRESET_ID: ColorPresetId = "Warm";
+export const DEFAULT_PRESET_ID: ColorPresetId = "Kumo";
 
+/** Supported palettes, including their light and dark detail roles. */
 export const COLOR_PRESET_IDS: ColorPresetId[] = [
-  "Warm",
-  "Red",
-  "Yellow",
-  "Green",
-  "Blue",
-  "Purple",
-  "Mono",
+  "Kumo",
+  "Anthropic",
+  "Carbon",
+  "Supabase",
 ];

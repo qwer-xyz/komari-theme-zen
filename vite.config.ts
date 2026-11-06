@@ -106,6 +106,11 @@ export default defineConfig(({ mode }) => {
     config.server = {
       ...config.server,
       proxy: {
+        "/favicon.ico": {
+          target: apiTarget || "http://127.0.0.1:25774",
+          changeOrigin: true,
+          secure: apiSecure,
+        },
         "/api": {
           target: apiTarget || "http://127.0.0.1:25774",
           changeOrigin: true,

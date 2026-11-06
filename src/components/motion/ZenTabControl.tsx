@@ -42,7 +42,7 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
       variant = "underline",
       className = "",
       tabClassName = "",
-      activeClassName = "text-zen-accent font-black",
+      activeClassName = "text-zen-accent font-medium",
       idleClassName = "",
       indicatorClassName = "",
       separator,
@@ -93,6 +93,18 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
       ref={rootRef}
       role="group"
       aria-label={ariaLabel}
+      onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        const buttons = [...(event.currentTarget as HTMLDivElement).querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+        const current = buttons.indexOf(event.target as HTMLButtonElement);
+        if (current < 0 || buttons.length === 0) return;
+        event.preventDefault();
+        const index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1
+          : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+        buttons[index].focus({ preventScroll: true });
+        buttons[index].click();
+        if (scrollable) buttons[index].scrollIntoView({ block: "nearest", inline: "nearest" });
+      }}
       className={`relative flex items-center ${scrollable ? "w-max gap-2 py-0.5 pr-3" : "gap-2"} ${className}`}
     >
       {indicator}
@@ -114,7 +126,7 @@ export const ZenTabControl = forwardRef<HTMLDivElement, ZenTabControlProps>(
             onClick={() => {
               if (!tab.disabled && tab.id !== value) onChange(tab.id);
             }}
-            className={`relative z-[1] shrink-0 cursor-pointer transition-[color,transform,opacity] duration-300 ease-[cubic-bezier(0.34,1.45,0.64,1)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 ${tabClassName} ${
+            className={`relative z-[1] shrink-0 cursor-pointer transition-transform duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${tabClassName} ${
               tab.id === value
                 ? activeClassName
                 : idleClassName || zenInteractive.tabIdle

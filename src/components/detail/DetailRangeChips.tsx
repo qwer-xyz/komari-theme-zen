@@ -19,8 +19,8 @@ interface DetailRangeChipsProps {
 
 function chipClass(active: boolean) {
   return active
-    ? "rounded-full bg-zen-chip px-2.5 py-[5px] text-[13px] font-medium leading-none text-zen-chip-fg"
-    : "rounded-full px-2 py-[5px] text-[13px] font-normal leading-none text-zen-fg-muted hover:text-zen-fg-strong";
+    ? "zen-control-trigger zen-range-chip bg-zen-chip font-medium text-zen-chip-fg"
+    : "zen-control-trigger zen-range-chip font-normal text-zen-fg-muted hover:text-zen-fg-strong";
 }
 
 export function DetailRangeChips({
@@ -40,6 +40,16 @@ export function DetailRangeChips({
       role="tablist"
       aria-label={messages.historyRange}
       className="flex max-w-full flex-wrap items-center gap-x-1 gap-y-1"
+      onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        const items = Array.from((event.currentTarget as HTMLDivElement).querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+        if (!items.length) return;
+        event.preventDefault();
+        const current = Math.max(0, items.indexOf(document.activeElement as HTMLButtonElement));
+        const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (current + (event.key === "ArrowRight" ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+        items[next]?.click();
+      }}
     >
       {showLive ? (
         <button

@@ -36,7 +36,7 @@ export function MetricPercentBar({
 
   return (
     <span className={`${metricWidgetGridClass} ${textPrimaryClass}`}>
-      <span className={`text-right font-bold tabular-nums ${valueClassName}`}>
+      <span className={`text-right font-mono font-medium tabular-nums ${valueClassName}`}>
         {normalizedPercent.toFixed(1)}%
       </span>
       <MetricBarTrack filled={filled} fillClassName={fillClassName} />

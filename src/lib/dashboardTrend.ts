@@ -7,6 +7,8 @@ import type { LiveRecord } from "@/types/LiveData";
 import type { LoadRecord } from "@/types/records";
 import { timestampMs } from "@/lib/numeric";
 
+export const DASHBOARD_TREND_RANGE_MS = 3 * 60_000;
+
 export type DashboardTrendSample = {
   t: number;
   cpu: number | null;
@@ -103,7 +105,7 @@ export function aggregateDashboardTrends(
   options: DashboardTrendOptions,
 ): DashboardTrendSeries {
   const endMs = options.endMs ?? Date.now();
-  const rangeMs = options.rangeMs ?? 60 * 60 * 1000;
+  const rangeMs = options.rangeMs ?? DASHBOARD_TREND_RANGE_MS;
   const bucketCount = Math.max(2, options.bucketCount ?? 28);
   const startMs = endMs - rangeMs;
   const bucketMs = rangeMs / bucketCount;

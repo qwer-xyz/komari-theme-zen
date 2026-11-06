@@ -1,4 +1,6 @@
 import { HistoryError } from "@/components/SectionErrorBoundary";
+import { ChartTooltip } from "@/components/ChartTooltip";
+import { UIState } from "@/components/UIState";
 import React from "react";
 import { Wifi } from "lucide-react";
 import { usePingRecords } from "@/hooks/usePingRecords";
@@ -22,7 +24,7 @@ import { formatMsg, translations, type Lang } from "@/lib/i18n";
 import { formatChartPointTime } from "@/lib/timeRangePresets";
 import { taskColor, taskPingVolatility } from "@/lib/recordTransform";
 import { zenType, zenTouch } from "@/lib/typography";
-import { zenPopover, zenText } from "@/lib/zenSemantics";
+import { zenText } from "@/lib/zenSemantics";
 import { PingChartOverview } from "@/components/detail/PingChartOverview";
 import type { PingRecord, PingTaskInfo } from "@/types/records";
 
@@ -130,6 +132,8 @@ export function LatencyProbePanel({
   const t = translations[lang];
   const [peakClipping, setPeakClipping] = React.useState(false);
   const [connectBreakpoints, setConnectBreakpoints] = React.useState(false);
+  const [hoveredProbeId, setHoveredProbeId] = React.useState<string | null>(null);
+  const tooltipId = React.useId();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = React.useState(320);
   const [container, setContainer] = React.useState<HTMLDivElement | null>(null);
@@ -182,6 +186,7 @@ export function LatencyProbePanel({
     () => tasks.filter((task) => activeProbeIds.includes(String(task.id))),
     [tasks, activeProbeIds],
   );
+  const highlightedProbeId = hoveredProbeId && activeProbeIds.includes(hoveredProbeId) ? hoveredProbeId : null;
   const colors = React.useMemo(
     () =>
       Object.fromEntries(
@@ -303,6 +308,7 @@ export function LatencyProbePanel({
 
   const {
     hoveredTime,
+    setHoveredTime,
     onMouseMove,
     onMouseLeave,
     onTouchStart,
@@ -387,13 +393,11 @@ export function LatencyProbePanel({
   }, [probeSnapshot, maxLatencyVal, chartHeight]);
 
   const crosshairRatio = activeX / width;
-  const tooltipOnLeft = crosshairRatio > 0.55;
 
   const formatProbeMs = (val: number) =>
     `${val >= 100 ? val.toFixed(0) : val.toFixed(1)} ms`;
 
-  const strokeColor =
-    theme === "dark" ? "rgba(250, 249, 245, 0.08)" : "rgba(48, 48, 46, 0.08)";
+  const strokeColor = "var(--zen-line)";
 
   const xAxisLabels = React.useMemo(() => {
     if (!viewRange) return [];
@@ -432,7 +436,7 @@ export function LatencyProbePanel({
               }));
 
             return (
-              <g key={id}>
+              <g key={id} data-probe-id={id} opacity={highlightedProbeId && highlightedProbeId !== id ? 0.2 : 1}>
                 {solidSegments.map((segment, segIdx) => {
                   const points = toChartPoints(segment);
                   const showGapCap = !connectBreakpoints;
@@ -529,6 +533,7 @@ export function LatencyProbePanel({
       viewRange,
       maxLatencyVal,
       connectBreakpoints,
+      highlightedProbeId,
     ],
   );
   const canRenderChart = fullRange != null && viewRange != null;
@@ -538,9 +543,9 @@ export function LatencyProbePanel({
 
   if (tasks.length === 0 && !isLoading) {
     return (
-      <div className="py-10 text-center text-sm text-zen-fg-muted">
+      <UIState inline>
         {t.pingNoTasks}
-      </div>
+      </UIState>
     );
   }
 
@@ -628,6 +633,20 @@ export function LatencyProbePanel({
               onTouchStart={isLoading ? undefined : onTouchStart}
               onTouchMove={isLoading ? undefined : onTouchMove}
               onTouchEnd={isLoading ? undefined : onTouchEnd}
+              tabIndex={isLoading ? -1 : 0}
+              role="group"
+              aria-label={chartTitle}
+              aria-describedby={isHovering ? tooltipId : undefined}
+              onFocus={() => viewRange && setHoveredTime(viewRange[1])}
+              onBlur={() => setHoveredTime(null)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") { setHoveredTime(null); return; }
+                if (!viewRange || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                event.preventDefault();
+                const [start, end] = viewRange;
+                const step = Math.max(1000, (end - start) / 100);
+                setHoveredTime(event.key === "Home" ? start : event.key === "End" ? end : Math.max(start, Math.min(end, (activeTime ?? end) + (event.key === "ArrowLeft" ? -step : step))));
+              }}
               className={`relative min-w-0 flex-1 overflow-visible pb-5 touch-pan-y ${isLoading ? "pointer-events-none" : "cursor-crosshair"}`}
             >
               <svg
@@ -688,23 +707,7 @@ export function LatencyProbePanel({
               </svg>
 
               {isHovering && (probeSnapshot.length > 0 || gapHint) && (
-                <div
-                  className={`absolute z-10 min-w-[8.5rem] max-w-[min(11rem,calc(100vw-2.5rem))] rounded-md px-2.5 py-2 pointer-events-none ${zenType.caption} font-mono select-none ${zenPopover}`}
-                  style={{
-                    left: `${crosshairRatio * 100}%`,
-                    top: `${(focusY / height) * 100}%`,
-                    transform: tooltipOnLeft
-                      ? "translate(calc(-100% - 10px), -0.5rem)"
-                      : "translate(10px, -0.5rem)",
-                  }}
-                >
-                  {activeTimeLabel ? (
-                    <div
-                      className={`mb-1.5 tabular-nums ${zenType.label} ${zenText.subtle}`}
-                    >
-                      {activeTimeLabel}
-                    </div>
-                  ) : null}
+                <ChartTooltip id={tooltipId} anchorRef={containerRef} xRatio={crosshairRatio} yRatio={focusY / height} timeLabel={activeTimeLabel}>
                   {gapHint ? (
                     <div
                       className={`mb-1.5 tabular-nums ${zenType.label} ${zenText.faint} italic`}
@@ -727,13 +730,13 @@ export function LatencyProbePanel({
                         >
                           {task.name}
                         </span>
-                        <span className="shrink-0 font-bold tabular-nums text-zen-fg-strong">
+                        <span className="shrink-0 font-mono font-medium tabular-nums text-zen-fg-strong">
                           {formatProbeMs(val)}
                         </span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </ChartTooltip>
               )}
 
               <div className="pointer-events-none absolute bottom-0 left-0 right-0">
@@ -772,11 +775,11 @@ export function LatencyProbePanel({
 
             <div className="space-y-2 pt-1 select-none">
               <div
-                className={`${zenType.label} zen-track-tight uppercase font-bold font-mono ${zenText.subtle}`}
+                className={`text-sm font-medium ${zenText.subtle}`}
               >
                 {t.pingProbeFilter}
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 sm:gap-x-6 gap-y-2.5 pt-1.5 font-mono">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1.5">
                 {tasks.map((task) => {
                   const id = String(task.id);
                   const color = colors[id];
@@ -796,15 +799,19 @@ export function LatencyProbePanel({
                       key={id}
                       type="button"
                       onClick={() => onToggleProbe(id)}
+                      onMouseEnter={() => setHoveredProbeId(id)}
+                      onMouseLeave={() => setHoveredProbeId(null)}
+                      onFocus={() => setHoveredProbeId(id)}
+                      onBlur={() => setHoveredProbeId(null)}
                       aria-pressed={isSelected}
                       title={`${task.name} — ${metricsTitle}`}
-                      className={`flex items-center gap-1.5 min-w-0 w-full ${zenTouch.btn} transition-all duration-200 cursor-pointer rounded-md border px-2 py-1 ${
+                      className={`zen-probe-chip flex items-center gap-2 min-w-0 w-full cursor-pointer rounded-md border px-2.5 py-1.5 ${
                         isSelected
-                          ? "text-zen-accent font-extrabold border-zen-accent/55 bg-zen-accent/12 dark:bg-zen-accent/18 shadow-[0_1px_0_rgba(0,0,0,0.04)]"
+                          ? "text-zen-accent border-zen-accent/55 bg-zen-chip"
                           : isChartActive
                             ? `${zenText.primary} border-zen-border bg-zen-surface/55 hover:border-zen-accent/45 hover:bg-zen-fill-muted/10`
                             : `${zenText.muted} border-zen-border-muted bg-transparent hover:border-zen-accent/35 hover:text-zen-fg-strong hover:bg-zen-fill-muted/8`
-                      } ${zenType.caption}`}
+                      } text-sm`}
                     >
                       <span
                         className={`rounded-full shrink-0 transition-all duration-200 ${
@@ -816,18 +823,14 @@ export function LatencyProbePanel({
                       />
                       <span
                         className={`shrink-0 whitespace-nowrap text-left font-sans ${zenType.caption} ${
-                          isSelected ? "font-bold" : "font-medium"
+                          isSelected ? "font-medium" : "font-normal"
                         }`}
                       >
                         {task.name}
                       </span>
                       <span
                         className={`min-w-0 flex-1 truncate text-right font-mono tabular-nums ${
-                          isSelected
-                            ? "font-extrabold"
-                            : isChartActive
-                              ? "font-bold"
-                              : ""
+                          isSelected ? "font-medium" : "font-normal"
                         }`}
                       >
                         <span>
@@ -861,7 +864,7 @@ export function LatencyProbePanel({
                 <button
                   type="button"
                   onClick={() => onToggleProbe("CLEAR_ALL")}
-                  className={`font-bold tracking-wider underline cursor-pointer hover:text-zen-accent transition-colors uppercase ${zenType.label}`}
+                  className={`inline-flex items-center rounded-md px-2 -ml-2 font-sans font-medium cursor-pointer transition-colors hover:bg-zen-elevate hover:text-zen-accent ${zenText.muted} ${zenType.label} ${zenTouch.btn}`}
                 >
                   {t.pingShowAll}
                 </button>
@@ -870,18 +873,18 @@ export function LatencyProbePanel({
           </>
         ) : isLoading ? (
           <div className="space-y-4 pt-1" aria-hidden>
-            <div className="h-52 sm:h-56 md:h-60 rounded-sm bg-zen-fill-muted/10" />
-            <div className="h-11 rounded-sm bg-zen-fill-muted/8" />
+            <div className="zen-skeleton h-52 sm:h-56 md:h-60 rounded-md bg-zen-fill-muted/50" />
+            <div className="zen-skeleton h-11 rounded-md bg-zen-fill-muted/50" />
             <div className="space-y-2 pt-1">
               <div className="h-3 w-36 rounded bg-zen-fill-muted/12" />
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 gap-y-2.5 pt-1.5">
-                {Array.from({ length: 8 }, (_, i) => (
-                  <div key={i} className="h-5 rounded bg-zen-fill-muted/8" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1.5">
+                {Array.from({ length: Math.max(3, tasks.length) }, (_, i) => (
+                  <div key={i} className="zen-skeleton h-11 rounded-md bg-zen-fill-muted/50" />
                 ))}
               </div>
             </div>
           </div>
-        ) : null}
+        ) : <UIState inline>{t.noHistory}</UIState>}
       </div>
     </div>
   );
