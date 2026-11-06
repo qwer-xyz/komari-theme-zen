@@ -25,6 +25,7 @@ import {
   formatBillingCycleSuffix,
   formatNodeBilling,
   formatPricePart,
+  shouldShowAutoRenewalBadge,
   type BillingLabels,
 } from "@/lib/billingDisplay";
 import {
@@ -932,9 +933,12 @@ export function NodeTable({
       getNodeBilling(node).expiryKind === "long_term";
 
     const shouldShowAutoRenewal = (node: VPSNode) =>
-      showAutoRenewal &&
-      typeof node.autoRenewal === "boolean" &&
-      !isLongTermBilling(node);
+      shouldShowAutoRenewalBadge({
+        expiredAt: node.expiredAt,
+        autoRenewal: node.autoRenewal,
+        showAutoRenewal,
+        isLongTerm: isLongTermBilling(node),
+      });
 
     const autoRenewalText = (node: VPSNode) =>
       node.autoRenewal ? t.autoRenewalEnabled : t.autoRenewalDisabled;
