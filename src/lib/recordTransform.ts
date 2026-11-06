@@ -14,13 +14,13 @@ import { LATENCY_HISTORY_LEN, type LatencySample } from "@/lib/latencyDisplay";
 
 /** Distinct probe line colors — follow active chart tokens so presets stay coherent. */
 const PING_COLOR_VARS = [
-  "var(--zen-chart-mem)",
-  "var(--zen-chart-load)",
-  "var(--zen-chart-cpu)",
-  "var(--zen-chart-net-out)",
-  "var(--zen-chart-swap)",
+  "var(--zen-latency-1)",
+  "var(--zen-latency-2)",
+  "var(--zen-latency-3)",
+  "var(--zen-latency-4)",
+  "var(--zen-series-mem)",
+  "var(--zen-series-disk)",
   "var(--zen-chart-net-in)",
-  "var(--zen-chart-udp)",
   "var(--zen-danger)",
 ] as const;
 

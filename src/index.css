@@ -5,8 +5,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
+  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC",
+    "Noto Sans CJK SC", "Microsoft YaHei", "Source Han Sans SC", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Warm-tinted neutral scale — used only by Radix tag color names (rose, sky, etc.).
@@ -53,6 +54,28 @@
   --zen-chart-net-out: #b66060;
   --zen-chart-tcp: #c6613f;
   --zen-chart-udp: #8d7699;
+
+  /* Detail-page accent roles. Fixed so custom presets do not wash them out. */
+  --zen-detail-bg: #f4f1eb;
+  --zen-card: #fffdfb;
+  --zen-card-line: #e7e2d9;
+  --zen-online: #5aa86a;
+  --zen-online-bg: #e6f5e8;
+  --zen-chip: #f6e3d8;
+  --zen-chip-fg: #c45c38;
+  --zen-series-cpu: #e07a48;
+  --zen-series-mem: #2eabbe;
+  --zen-series-disk: #d0a44a;
+  --zen-series-swap: #9a86ae;
+  --zen-series-net-in: #2eabbe;
+  --zen-series-net-out: #e07a48;
+  --zen-series-tcp: #e07a48;
+  --zen-series-udp: #9a7ec4;
+  --zen-series-proc: #d0a44a;
+  --zen-latency-1: #2eabbe;
+  --zen-latency-2: #d0a44a;
+  --zen-latency-3: #e07a48;
+  --zen-latency-4: #9a7ec4;
 }
 
 .dark {
@@ -82,6 +105,27 @@
   --zen-chart-net-out: #b66060;
   --zen-chart-tcp: #c6613f;
   --zen-chart-udp: #8d7699;
+
+  --zen-detail-bg: #141413;
+  --zen-card: #222120;
+  --zen-card-line: rgba(250, 249, 245, 0.12);
+  --zen-online: #8dce96;
+  --zen-online-bg: rgba(94, 174, 104, 0.16);
+  --zen-chip: rgba(232, 146, 106, 0.18);
+  --zen-chip-fg: #f0b49a;
+  --zen-series-cpu: #e8926a;
+  --zen-series-mem: #5ec4d0;
+  --zen-series-disk: #e0b86a;
+  --zen-series-swap: #b9a4cc;
+  --zen-series-net-in: #5ec4d0;
+  --zen-series-net-out: #e8926a;
+  --zen-series-tcp: #e8926a;
+  --zen-series-udp: #c4a8dc;
+  --zen-series-proc: #e0b86a;
+  --zen-latency-1: #5ec4d0;
+  --zen-latency-2: #e0b86a;
+  --zen-latency-3: #e8926a;
+  --zen-latency-4: #c4a8dc;
 }
 
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
@@ -117,6 +161,26 @@
   --color-zen-chart-net-out: var(--zen-chart-net-out);
   --color-zen-chart-tcp: var(--zen-chart-tcp);
   --color-zen-chart-udp: var(--zen-chart-udp);
+  --color-zen-detail-bg: var(--zen-detail-bg);
+  --color-zen-card: var(--zen-card);
+  --color-zen-card-line: var(--zen-card-line);
+  --color-zen-online: var(--zen-online);
+  --color-zen-online-bg: var(--zen-online-bg);
+  --color-zen-chip: var(--zen-chip);
+  --color-zen-chip-fg: var(--zen-chip-fg);
+  --color-zen-series-cpu: var(--zen-series-cpu);
+  --color-zen-series-mem: var(--zen-series-mem);
+  --color-zen-series-disk: var(--zen-series-disk);
+  --color-zen-series-swap: var(--zen-series-swap);
+  --color-zen-series-net-in: var(--zen-series-net-in);
+  --color-zen-series-net-out: var(--zen-series-net-out);
+  --color-zen-series-tcp: var(--zen-series-tcp);
+  --color-zen-series-udp: var(--zen-series-udp);
+  --color-zen-series-proc: var(--zen-series-proc);
+  --color-zen-latency-1: var(--zen-latency-1);
+  --color-zen-latency-2: var(--zen-latency-2);
+  --color-zen-latency-3: var(--zen-latency-3);
+  --color-zen-latency-4: var(--zen-latency-4);
 }
 
 html,

@@ -210,4 +210,8 @@ export type Messages = {
   mapExpandHint: string;
   btnClose: string;
   mapRegionTooltip: (code: string, online: number, total: number) => string;
+  settingsLabel: string;
+  lblBootTime: string;
+  lblNone: string;
+  loadAvgHint: string;
 };

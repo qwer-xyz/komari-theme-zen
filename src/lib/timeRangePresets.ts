@@ -110,6 +110,25 @@ export function formatChartPointTime(iso: string, rangeHours: number): string {
   });
 }
 
+/** Detail-page history chips: 6h / 12h / 18h / 1d, plus any longer backend presets. */
+export const DETAIL_RANGE_HOURS = [6, 12, 18, 24] as const;
+
+export function detailHistoryHours(
+  maxHours: number,
+  presets: number[] = [],
+): number[] {
+  if (maxHours <= 0) return [];
+  const standard: number[] = DETAIL_RANGE_HOURS.filter(
+    (hours) => hours <= maxHours,
+  );
+  const extras = presets.filter(
+    (hours) => hours > 24 && hours <= maxHours && !standard.includes(hours),
+  );
+  const hours = [...new Set([...standard, ...extras])].sort((a, b) => a - b);
+  if (hours.length > 0) return hours;
+  return [Math.max(1, Math.floor(maxHours))];
+}
+
 export function hoursToChartLength(hours: number): number {
   if (hours >= 24) return 97;
   if (hours >= 12) return 85;

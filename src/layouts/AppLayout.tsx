@@ -75,7 +75,9 @@ export function AppLayout() {
   );
 
   const textMutedClass = `${zenText.subtle}/85`;
-  const bgClass = "bg-zen-bg text-zen-fg";
+  const bgClass = isDetail
+    ? "bg-zen-detail-bg text-zen-fg"
+    : "bg-zen-bg text-zen-fg";
 
   if (!isPluginPage && isLoading) {
     return (

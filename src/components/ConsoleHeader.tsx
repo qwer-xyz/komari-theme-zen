@@ -14,7 +14,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { Link } from "react-router-dom";
-import { Settings, Globe } from "lucide-react";
+import { Settings, Globe, Sun, Moon } from "lucide-react";
 import { LanguageMenu } from "@/components/LanguageMenu";
 import { VPSNode } from "../types";
 import { translations, Lang } from "../lib/i18n";
@@ -368,6 +368,91 @@ function LocalClock({
   );
 }
 
+function DetailThemeControl({
+  themePreference,
+  setThemePreference,
+  labels,
+  showLabel = true,
+}: {
+  themePreference: ThemePreference;
+  setThemePreference: (theme: ThemePreference) => void;
+  labels: { auto: string; light: string; dark: string };
+  showLabel?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !root.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [open]);
+
+  const current =
+    themePreference === "dark"
+      ? { label: labels.dark, Icon: Moon }
+      : themePreference === "light"
+        ? { label: labels.light, Icon: Sun }
+        : { label: labels.auto, Icon: Sun };
+  const options: {
+    id: ThemePreference;
+    label: string;
+    Icon: typeof Sun;
+  }[] = [
+    { id: "auto", label: labels.auto, Icon: Sun },
+    { id: "light", label: labels.light, Icon: Sun },
+    { id: "dark", label: labels.dark, Icon: Moon },
+  ];
+
+  return (
+    <div ref={root} className="relative">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={current.label}
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-zen-fg-strong hover:text-zen-accent"
+      >
+        <current.Icon size={16} strokeWidth={1.75} aria-hidden />
+        {showLabel ? <span>{current.label}</span> : null}
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-[80] mt-1.5 w-36 rounded-xl border border-zen-card-line bg-zen-card p-1 text-sm shadow-sm"
+        >
+          {options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={themePreference === option.id}
+              onClick={() => {
+                setThemePreference(option.id);
+                setOpen(false);
+              }}
+              className={`flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 text-left ${
+                themePreference === option.id
+                  ? "font-medium text-zen-chip-fg"
+                  : "text-zen-fg-strong hover:bg-zen-elevate"
+              }`}
+            >
+              <option.Icon size={15} strokeWidth={1.75} aria-hidden />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 interface ConsoleHeaderProps {
   nodes: VPSNode[];
   lang: Lang;
@@ -567,14 +652,15 @@ export function ConsoleHeader({
     </Link>
   );
 
-  const adminEntryLink = (className = "") => (
+  const adminEntryLink = (className = "", label?: string) => (
     <a
       href="/admin"
-      aria-label={t.controlWorkspace}
-      title={t.controlWorkspace}
-      className={`inline-flex shrink-0 items-center justify-center ${zenTouch.btn} cursor-pointer transition-colors ${btnHoverColor} ${textPrimary} ${className}`}
+      aria-label={label || t.controlWorkspace}
+      title={label || t.controlWorkspace}
+      className={`inline-flex shrink-0 items-center justify-center gap-1.5 ${label ? "px-1 py-1 text-sm font-medium" : zenTouch.btn} cursor-pointer transition-colors ${btnHoverColor} ${textPrimary} ${className}`}
     >
-      <Settings size={15} strokeWidth={2.25} aria-hidden />
+      <Settings size={label ? 16 : 15} strokeWidth={1.75} aria-hidden />
+      {label ? <span>{label}</span> : null}
     </a>
   );
 
@@ -611,92 +697,36 @@ export function ConsoleHeader({
     );
   };
 
-  const settingsControls = (options?: { compact?: boolean }) => {
-    const compact = options?.compact ?? false;
-    const rootClass = compact
-      ? `flex flex-col items-end gap-1.5 font-mono ${zenType.label} tracking-wide ${zenText.subtle}`
-      : `flex md:justify-end items-center gap-x-6 gap-y-3 flex-wrap font-mono ${zenType.data} tracking-widest ${zenText.subtle}`;
-
-    return (
-      <div className={rootClass}>
-        <div className="flex items-center gap-2">
-          <LanguageMenu lang={lang} onChange={setLangPreference} />
-
-          {!compact ? (
-            <span
-              className={`${zenText.faint} font-bold block select-none px-1`}
-            >
-              /
-            </span>
-          ) : null}
-        </div>
-
-        <div
-          className={`flex items-center ${compact ? "gap-1.5 justify-end flex-wrap" : "gap-3"}`}
-        >
-          <button
-            type="button"
-            onClick={() => setThemePreference("auto")}
-            aria-pressed={themePreference === "auto"}
-            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
-              themePreference === "auto"
-                ? `${textPrimary} underline underline-offset-4`
-                : zenText.subtle
-            }`}
-          >
-            {t.themeAuto}
-          </button>
-          <span className={zenText.faint} aria-hidden>
-            ·
-          </span>
-          <button
-            type="button"
-            onClick={() => setThemePreference("dark")}
-            aria-pressed={themePreference === "dark"}
-            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
-              themePreference === "dark"
-                ? `${textPrimary} underline underline-offset-4`
-                : zenText.subtle
-            }`}
-          >
-            {t.themeDark}
-          </button>
-          <span className={zenText.faint} aria-hidden>
-            ·
-          </span>
-          <button
-            type="button"
-            onClick={() => setThemePreference("light")}
-            aria-pressed={themePreference === "light"}
-            className={`inline-flex min-h-11 items-center px-1 cursor-pointer transition-all hover:text-zen-accent font-extrabold ${
-              themePreference === "light"
-                ? `${textPrimary} underline underline-offset-4`
-                : zenText.subtle
-            }`}
-          >
-            {t.themeLight}
-          </button>
-          <span className={zenText.faint} aria-hidden>
-            ·
-          </span>
-          {adminEntryLink(compact ? "p-0.5" : "p-1")}
-        </div>
-      </div>
-    );
-  };
+  const headerControls = (compact = false) => (
+    <div
+      className={`flex flex-wrap items-center justify-end font-sans normal-case tracking-normal ${
+        compact ? "gap-1" : "gap-x-3 gap-y-1"
+      }`}
+    >
+      <LanguageMenu
+        lang={lang}
+        onChange={setLangPreference}
+        tone="detail"
+        compact={compact}
+      />
+      <DetailThemeControl
+        themePreference={themePreference}
+        setThemePreference={setThemePreference}
+        showLabel={!compact}
+        labels={{
+          auto: t.themeAuto,
+          light: t.themeLight,
+          dark: t.themeDark,
+        }}
+      />
+      {compact ? adminEntryLink("p-1") : adminEntryLink("", t.settingsLabel)}
+    </div>
+  );
 
   return (
-    <header
-      className={`km-navbar font-sans ${zenType.body} uppercase select-none`}
-    >
+    <header className={`km-navbar font-sans ${zenType.body} uppercase select-none`}>
       {/* 1. Responsive Top Bar with absolute vertical alignment (items-center) */}
-      <div
-        className={
-          view === "detail"
-            ? "pb-4 md:pb-5 border-b border-zen-line"
-            : "pb-5 md:pb-6"
-        }
-      >
+      <div className="pb-5 md:pb-6">
         <div className="md:hidden space-y-1">
           <h1 className={siteTitleClass}>{renderSiteTitle()}</h1>
           {siteDescription ? (
@@ -717,8 +747,8 @@ export function ConsoleHeader({
             compact
             className="flex min-w-0 flex-1 flex-col text-left font-mono"
           />
-          <div className="shrink-0 pt-0.5">
-            {settingsControls({ compact: true })}
+          <div className="max-w-[68%] shrink-0 pt-0.5">
+            {headerControls()}
           </div>
         </div>
 
@@ -745,7 +775,7 @@ export function ConsoleHeader({
           />
 
           {/* Right: Modern Menu Controls (with localized Dark/Light options) */}
-          <div>{settingsControls()}</div>
+          <div className="flex justify-end">{headerControls()}</div>
         </div>
       </div>
 

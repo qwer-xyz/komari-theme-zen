@@ -8,7 +8,18 @@ import { liveGpuDeviceAt, resolveGpuReading } from "@/lib/liveGpu";
 import { HistoryError } from "@/components/SectionErrorBoundary";
 import React from "react";
 import { Link } from "react-router-dom";
-import { Activity, ArrowLeft, Cpu, Gauge, RadioTower } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  ArrowLeftRight,
+  Cpu,
+  HardDrive,
+  Info,
+  Layers,
+  List,
+  MemoryStick,
+  Wifi,
+} from "lucide-react";
 import { VPSNode } from "../types";
 import { translations, Lang, type Messages } from "../lib/i18n";
 import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
@@ -17,7 +28,7 @@ const LatencyProbePanel = React.lazy(() =>
     default: m.LatencyProbePanel,
   })),
 );
-import { HistoryRangeSelector } from "@/components/detail/HistoryRangeSelector";
+import { DetailRangeChips } from "@/components/detail/DetailRangeChips";
 import { useLoadRecords } from "@/hooks/useLoadRecords";
 import { useNodeRecent } from "@/hooks/useNodeRecent";
 import { useRecordSettings } from "@/hooks/useRecordSettings";
@@ -28,7 +39,10 @@ import {
   loadTotalsFromNode,
   normalizeLoadSeries,
 } from "@/lib/recordTransform";
-import { formatChartOffsetLabel } from "@/lib/timeRangePresets";
+import {
+  detailHistoryHours,
+  formatChartOffsetLabel,
+} from "@/lib/timeRangePresets";
 import {
   formatBytesPerSec,
   formatKbps,
@@ -50,7 +64,6 @@ import {
   resolveExpiryState,
   type BillingLabels,
 } from "@/lib/billingDisplay";
-import { Flag } from "@/components/Flag";
 import { OsIcon } from "@/components/OsIcon";
 import { NodeTags } from "@/components/NodeTags";
 import { parseNodeTags } from "@/lib/parseNodeTags";
@@ -58,10 +71,9 @@ import { useChartScrub } from "@/hooks/useChartScrub";
 import { useLiveSeries } from "@/hooks/useLiveSeries";
 import { useLiveData } from "@/contexts/LiveDataContext";
 import { safePercent } from "@/lib/numeric";
-import { zenType, zenTouch } from "@/lib/typography";
-import { zenBorder, zenFill, zenPopover, zenText } from "@/lib/zenSemantics";
+import { zenType } from "@/lib/typography";
+import { zenText } from "@/lib/zenSemantics";
 import { zenMotion } from "@/lib/zenMotion";
-import { ZenTabControl } from "@/components/motion/ZenTabControl";
 
 interface NodeDetailProps {
   node: VPSNode;
@@ -116,18 +128,142 @@ function DetailSection({
   );
 }
 
-function DetailPanel({
+function SpecRow({
+  label,
   children,
-  className = "",
 }: {
+  label: string;
   children: React.ReactNode;
-  className?: string;
 }) {
   return (
-    <div
-      className={`rounded-2xl border border-zen-line bg-zen-surface/70 p-5 shadow-[0_10px_30px_rgba(38,35,28,0.045)] transition-colors dark:shadow-[0_12px_32px_rgba(0,0,0,0.16)] sm:p-6 ${className}`}
-    >
-      {children}
+    <div className="flex items-start justify-between gap-3 py-[3px]">
+      <span className="max-w-[46%] shrink-0 pt-px text-[13px] leading-5 text-zen-fg-muted">
+        {label}
+      </span>
+      <span className="min-w-0 flex-1 break-words text-right text-[13px] font-medium leading-5 text-zen-fg-strong">
+        {children}
+      </span>
+    </div>
+  );
+}
+
+function LoadMeter({
+  label,
+  value,
+  percent,
+  color,
+  hint,
+  valueInline = false,
+  track = "fill",
+}: {
+  label: string;
+  value: React.ReactNode;
+  percent?: number | null;
+  color?: string;
+  hint?: string;
+  /** Keep the reading next to the label instead of the far edge. */
+  valueInline?: boolean;
+  /** fill draws a thin bar; none is text only. */
+  track?: "fill" | "none";
+}) {
+  const width = Math.min(100, Math.max(0, percent ?? 0));
+  return (
+    <div className={track === "none" ? "" : "space-y-1.5"}>
+      <div
+        className={`flex items-baseline gap-2 ${
+          valueInline ? "" : "justify-between"
+        }`}
+      >
+        <span className="inline-flex min-w-0 items-center gap-1 text-[13px] text-zen-fg-muted">
+          <span className="truncate">{label}</span>
+          {hint ? (
+            <span title={hint} className="inline-flex shrink-0">
+              <Info
+                className="h-3.5 w-3.5 text-zen-fg-faint"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+            </span>
+          ) : null}
+        </span>
+        <span className="shrink-0 text-[13px] font-semibold tabular-nums text-zen-fg-strong">
+          {value}
+        </span>
+      </div>
+      {track === "none" ? null : (
+        <div className="h-1 w-full overflow-hidden rounded-full bg-zen-fill-muted/35">
+          {percent != null && color ? (
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${width}%`, backgroundColor: color }}
+            />
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NetSpeedRow({
+  dot,
+  label,
+  speed,
+  totalLabel,
+  total,
+}: {
+  dot: string;
+  label: string;
+  speed: string;
+  totalLabel: string;
+  total: string;
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1.1fr)_auto_minmax(0,0.9fr)_auto] items-baseline gap-x-3 sm:gap-x-4">
+      <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-zen-fg-muted">
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: dot }}
+        />
+        <span className="truncate">{label}</span>
+      </span>
+      <span className="text-[13px] font-semibold tabular-nums text-zen-fg-strong">
+        {speed}
+      </span>
+      <span className="truncate text-[13px] text-zen-fg-muted">{totalLabel}</span>
+      <span className="text-[13px] font-semibold tabular-nums text-zen-fg-strong">
+        {total}
+      </span>
+    </div>
+  );
+}
+
+function DetailLoading({ label }: { label: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+      <div className="flex items-center gap-2 rounded-full border border-zen-card-line bg-zen-card px-3 py-1.5 text-sm text-zen-chip-fg">
+        <svg
+          className="h-3.5 w-3.5 animate-spin"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          aria-hidden
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          />
+        </svg>
+        <span>{label}</span>
+      </div>
     </div>
   );
 }
@@ -212,15 +348,32 @@ function lastValidIndex(arr: (number | null)[]): number {
 }
 
 const ZEN_CHART = {
-  cpu: "var(--zen-chart-cpu)",
-  mem: "var(--zen-chart-mem)",
-  swap: "var(--zen-chart-swap)",
-  load: "var(--zen-chart-load)",
-  netIn: "var(--zen-chart-net-in)",
-  netOut: "var(--zen-chart-net-out)",
-  tcp: "var(--zen-chart-tcp)",
-  udp: "var(--zen-chart-udp)",
+  cpu: "var(--zen-series-cpu)",
+  mem: "var(--zen-series-mem)",
+  swap: "var(--zen-series-swap)",
+  load: "var(--zen-series-disk)",
+  disk: "var(--zen-series-disk)",
+  netIn: "var(--zen-series-net-in)",
+  netOut: "var(--zen-series-net-out)",
+  tcp: "var(--zen-series-tcp)",
+  udp: "var(--zen-series-udp)",
+  proc: "var(--zen-series-proc)",
 } as const;
+
+function niceCeil(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  const pow = 10 ** Math.floor(Math.log10(value));
+  const n = value / pow;
+  const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return nice * pow;
+}
+
+const detailCardClass =
+  "rounded-2xl border border-zen-card-line bg-zen-card px-4 py-3.5 sm:px-5 sm:py-4";
+const chartCardClass =
+  "rounded-2xl border border-zen-card-line bg-zen-card px-3.5 py-3 sm:px-4 sm:py-3.5";
+const detailTitleClass =
+  "text-sm font-semibold leading-none text-zen-fg-strong";
 
 const MiniLineChart = ({
   data,
@@ -242,6 +395,7 @@ const MiniLineChart = ({
   valueFormatter,
   timestamps,
   extraSeries,
+  icon: Icon,
 }: {
   key?: React.Key;
   data: (number | null)[];
@@ -263,6 +417,7 @@ const MiniLineChart = ({
   valueFormatter?: (value: number) => string;
   timestamps?: number[];
   extraSeries?: ChartExtraSeries[];
+  icon?: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -298,28 +453,42 @@ const MiniLineChart = ({
   );
   const chartMax =
     unitMode === "speed" && speedScale
-      ? scaleSpeedValue(rawMax, speedScale) * 1.15
-      : rawMax;
+      ? scaleSpeedValue(rawMax, speedScale) * 1.12
+      : unitMode === "count"
+        ? niceCeil(rawMax)
+        : rawMax;
+
+  const axisLabels = React.useMemo(() => {
+    if (unitMode === "speed") {
+      const topBytes = rawMax * 1.12;
+      return [
+        formatSpeedAxisMax(topBytes).replace(/\/S\b/g, "/s"),
+        formatSpeedAxisMax(topBytes / 2).replace(/\/S\b/g, "/s"),
+        "0",
+      ];
+    }
+    if (unitMode === "percent") {
+      const top = chartMax;
+      return [`${top.toFixed(0)}${unit}`, `${(top / 2).toFixed(0)}${unit}`, `0${unit}`];
+    }
+    const top = chartMax;
+    const fmt = (value: number) =>
+      value >= 100 ? String(Math.round(value)) : String(Math.round(value * 10) / 10);
+    return [fmt(top), fmt(top / 2), "0"];
+  }, [chartMax, rawMax, unit, unitMode]);
 
   const formatDisplay = (v: number | null) => {
     if (v == null || !Number.isFinite(v)) return "—";
     if (valueFormatter) return valueFormatter(v);
-    if (unitMode === "speed") return formatBytesPerSec(v);
+    if (unitMode === "speed") return formatBytesPerSec(v).replace(/\/S\b/g, "/s");
     if (unitMode === "percent") return formatPercent(v);
     return String(Math.round(v));
   };
 
-  const axisMaxLabel =
-    unitMode === "speed"
-      ? formatSpeedAxisMax(rawMax)
-      : `${chartMax.toFixed(0)}${unitMode === "percent" ? unit : ""}`;
-
-  const showDecimals = decimals ?? unitMode === "percent";
-
   const width = 500;
   const height = 120;
-  const paddingX = 16;
-  const paddingY = 15;
+  const paddingX = 2;
+  const paddingY = 4;
   const chartWidth = width - paddingX * 2; // 468
   const chartHeight = height - paddingY * 2; // 90
   const maxValSafe = chartMax <= 0 ? 1 : chartMax;
@@ -411,12 +580,10 @@ const MiniLineChart = ({
   const { points1, points2, extraLayers, pathD, areaD, pathD2, areaD2 } =
     chartGeometry;
 
-  // Grid lines
-  const gridLines = React.useMemo(() => [0.25, 0.5, 0.75, 1], []);
+  const gridLines = React.useMemo(() => [0, 0.5, 1], []);
 
   const strokeColor =
-    theme === "dark" ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)";
-  const labelColor = `${zenText.subtle} font-mono`;
+    theme === "dark" ? "rgba(250, 249, 245, 0.08)" : "rgba(48, 48, 46, 0.08)";
 
   const isHovering = hoveredIndex !== null;
   const lastIdx1 = lastValidIndex(chartData);
@@ -468,67 +635,66 @@ const MiniLineChart = ({
 
   const safeId = title.replace(/[^a-zA-Z0-9]/g, "_");
 
+  const secondMuted =
+    displayVal2 != null && Number.isFinite(displayVal2) && displayVal2 === 0;
+
   return (
-    <div
-      ref={containerRef}
-      onMouseMove={onMouseMove}
-      onMouseLeave={onMouseLeave}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-      className="km-load-chart group py-2 flex flex-col space-y-3 cursor-crosshair"
-    >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 select-none">
-        <span
-          className={`shrink-0 font-extrabold tracking-wider uppercase ${zenType.body} ${zenText.primary} font-mono`}
-        >
-          {title}
+    <div className="km-load-chart group flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-3 select-none">
+        <span className="flex min-w-0 items-center gap-2">
+          {Icon ? (
+            <Icon
+              className="h-4 w-4 shrink-0 text-zen-fg-muted"
+              strokeWidth={1.75}
+            />
+          ) : null}
+          <span className="truncate text-sm font-medium text-zen-fg-strong">
+            {title}
+          </span>
         </span>
-        <span className="h-px min-w-4 flex-1 bg-zen-line" aria-hidden />
-        <div
-          className={`ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:gap-x-3 ${zenType.data} font-mono select-none font-bold`}
-        >
-          {isHovering && (
-            <span
-              className={`${zenType.label} text-zen-fg-muted bg-zen-fill-muted/10 px-1.5 py-0.5 rounded tracking-wide font-bold tabular-nums`}
-            >
+        <span className="flex shrink-0 flex-wrap items-center justify-end gap-x-2.5 gap-y-0.5 text-sm font-semibold tabular-nums">
+          {isHovering ? (
+            <span className="text-xs font-medium text-zen-fg-muted">
               {hoverLabel}
             </span>
-          )}
-          {!isHovering && (
-            <>
-              <span className="text-zen-fg-strong">
-                <span style={{ color }} aria-hidden>
-                  ●
-                </span>{" "}
-                {formatDisplay(displayVal1)}
-              </span>
-              {displayVal2 !== null && (
-                <span className="text-zen-fg-strong">
-                  <span style={{ color: color2 }} aria-hidden>
-                    ●
-                  </span>{" "}
-                  {formatDisplay(displayVal2)}
-                </span>
-              )}
-            </>
-          )}
-        </div>
+          ) : null}
+          <span style={{ color }}>{formatDisplay(displayVal1)}</span>
+          {displayVal2 !== null ? (
+            <span
+              style={secondMuted ? undefined : { color: color2 }}
+              className={secondMuted ? "text-zen-fg-faint" : undefined}
+            >
+              {formatDisplay(displayVal2)}
+            </span>
+          ) : null}
+        </span>
       </div>
 
-      <div className="relative pointer-events-none">
+      <div className="flex items-stretch gap-1.5">
+        <div className="flex w-14 shrink-0 flex-col justify-between py-0.5 text-right text-[10px] leading-none tabular-nums text-zen-fg-faint">
+          {axisLabels.map((label, index) => (
+            <span key={`${label}-${index}`}>{label}</span>
+          ))}
+        </div>
         {!hasData ? (
-          <div
-            className={`h-28 sm:h-32 md:h-24 flex items-center justify-center ${zenType.caption} uppercase tracking-widest font-mono ${zenText.faint}`}
-          >
+          <div className="flex h-24 flex-1 items-center justify-center text-sm text-zen-fg-muted">
             {messages.noHistory}
           </div>
         ) : (
-          <>
+          <div
+            ref={containerRef}
+            onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            className="relative min-w-0 flex-1 cursor-crosshair touch-pan-y"
+          >
             <svg
+              data-chart-main
               viewBox={`0 0 ${width} ${height}`}
               preserveAspectRatio="none"
-              className="w-full h-28 sm:h-32 md:h-24 overflow-visible"
+              className="pointer-events-none h-24 w-full overflow-visible"
             >
               <defs>
                 <linearGradient
@@ -538,8 +704,8 @@ const MiniLineChart = ({
                   x2="0"
                   y2="1"
                 >
-                  <stop offset="0%" stopColor={color} stopOpacity="0.2" />
-                  <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+                  <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+                  <stop offset="100%" stopColor={color} stopOpacity="0.02" />
                 </linearGradient>
                 {data2 && (
                   <linearGradient
@@ -549,13 +715,12 @@ const MiniLineChart = ({
                     x2="0"
                     y2="1"
                   >
-                    <stop offset="0%" stopColor={color2} stopOpacity="0.15" />
+                    <stop offset="0%" stopColor={color2} stopOpacity="0.16" />
                     <stop offset="100%" stopColor={color2} stopOpacity="0.0" />
                   </linearGradient>
                 )}
               </defs>
 
-              {/* Grid lines */}
               {gridLines.map((ratio, index) => {
                 const h = height - paddingY - ratio * chartHeight;
                 return (
@@ -566,22 +731,7 @@ const MiniLineChart = ({
                     x2={width}
                     y2={h}
                     stroke={strokeColor}
-                    strokeDasharray="2,4"
-                  />
-                );
-              })}
-              {/* Vertical Grid ticks */}
-              {Array.from({ length: 5 }).map((_, i) => {
-                const x = paddingX + (i / 4) * chartWidth;
-                return (
-                  <line
-                    key={i}
-                    x1={x}
-                    y1={paddingY}
-                    x2={x}
-                    y2={height - paddingY}
-                    stroke={strokeColor}
-                    strokeDasharray="2,4"
+                    strokeWidth="1"
                   />
                 );
               })}
@@ -614,11 +764,10 @@ const MiniLineChart = ({
                 <path
                   d={pathD2}
                   stroke={color2}
-                  strokeWidth="1"
+                  strokeWidth="1.6"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   fill="none"
-                  className="opacity-80"
                 />
               )}
 
@@ -629,7 +778,7 @@ const MiniLineChart = ({
                 <path
                   d={pathD}
                   stroke={color}
-                  strokeWidth="1.5"
+                  strokeWidth="1.75"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   fill="none"
@@ -749,18 +898,7 @@ const MiniLineChart = ({
                 })}
               </div>
             )}
-
-            <div
-              className={`absolute top-0.5 left-1 ${zenType.micro} leading-none ${labelColor} pointer-events-none select-none`}
-            >
-              MAX: {axisMaxLabel}
-            </div>
-            <div
-              className={`absolute bottom-0.5 left-1 ${zenType.micro} leading-none ${labelColor} pointer-events-none select-none`}
-            >
-              MIN: {unitMode === "percent" ? `0${unit}` : "0"}
-            </div>
-          </>
+          </div>
         )}
       </div>
 
@@ -769,100 +907,53 @@ const MiniLineChart = ({
   );
 };
 
-function splitTextAtFirstLine(
-  text: string,
-  maxWidth: number,
-  referenceEl: HTMLElement,
-): { first: string; rest: string } {
-  if (!text || maxWidth <= 0) return { first: text, rest: "" };
-
-  const style = getComputedStyle(referenceEl);
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { first: text, rest: "" };
-
-  ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-  const measure = (value: string) => ctx.measureText(value).width;
-
-  if (measure(text) <= maxWidth) return { first: text, rest: "" };
-
-  let lo = 1;
-  let hi = text.length;
-  let best = 1;
-
-  while (lo <= hi) {
-    const mid = Math.floor((lo + hi) / 2);
-    if (measure(text.slice(0, mid)) <= maxWidth) {
-      best = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  let splitAt = best;
-  const spaceIdx = text.lastIndexOf(" ", splitAt);
-  if (spaceIdx > 0) splitAt = spaceIdx;
-
-  const first = text.slice(0, splitAt).trimEnd();
-  const rest = text.slice(splitAt).trimStart();
-  if (!first) {
-    return { first: text.slice(0, best), rest: text.slice(best).trimStart() };
-  }
-  return { first, rest };
-}
-
 export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
   const t = translations[lang];
-  const { recordEnabled, loadPresets, pingPresets } = useRecordSettings();
+  const { recordEnabled, loadMaxHours, pingMaxHours, loadPresets, pingPresets } =
+    useRecordSettings();
   const { status: liveDataStatus } = useLiveData();
   const { pingTaskIds } = useThemeSettings();
+  const loadHistoryHours = React.useMemo(
+    () => detailHistoryHours(loadMaxHours, loadPresets),
+    [loadMaxHours, loadPresets],
+  );
+  const pingHistoryHours = React.useMemo(
+    () => detailHistoryHours(pingMaxHours, pingPresets),
+    [pingMaxHours, pingPresets],
+  );
 
-  const [selectedLoadHours, setSelectedLoadHours] = React.useState(
-    () => loadPresets[0] ?? 1,
-  );
-  const [selectedPingHours, setSelectedPingHours] = React.useState(
-    () => pingPresets[0] ?? 1,
-  );
+  const [selectedLoadHours, setSelectedLoadHours] = React.useState(6);
+  const [selectedPingHours, setSelectedPingHours] = React.useState(6);
   const [isPingLoading, setIsPingLoading] = React.useState(false);
-  const [subSection, setSubSection] = React.useState<"metrics" | "latency">(
-    "metrics",
-  );
   const [liveMode, setLiveMode] = React.useState(true);
+  const [pingLive, setPingLive] = React.useState(false);
   const [selectedProbes, setSelectedProbes] = React.useState<string[]>([]);
 
   const liveSamples = useLiveSeries(
     node,
-    node.status === "online" &&
-      liveDataStatus === "fresh" &&
-      subSection === "metrics" &&
-      liveMode,
+    node.status === "online" && liveDataStatus === "fresh" && liveMode,
   );
 
   React.useEffect(() => {
-    if (loadPresets.length === 0) return;
-    if (!loadPresets.includes(selectedLoadHours)) {
-      setSelectedLoadHours(loadPresets[0]);
+    if (loadHistoryHours.length === 0) return;
+    if (!loadHistoryHours.includes(selectedLoadHours)) {
+      setSelectedLoadHours(
+        loadHistoryHours.includes(6) ? 6 : loadHistoryHours[0],
+      );
     }
-  }, [loadPresets, selectedLoadHours]);
+  }, [loadHistoryHours, selectedLoadHours]);
 
   React.useEffect(() => {
-    if (pingPresets.length === 0) return;
-    if (!pingPresets.includes(selectedPingHours)) {
-      setSelectedPingHours(pingPresets[0]);
+    if (pingHistoryHours.length === 0) return;
+    if (!pingHistoryHours.includes(selectedPingHours)) {
+      setSelectedPingHours(
+        pingHistoryHours.includes(6) ? 6 : pingHistoryHours[0],
+      );
     }
-  }, [pingPresets, selectedPingHours]);
-
-  React.useEffect(() => {
-    if (!recordEnabled && subSection === "latency") {
-      setSubSection("metrics");
-    }
-  }, [recordEnabled, subSection]);
+  }, [pingHistoryHours, selectedPingHours]);
 
   const loadHours =
-    recordEnabled && node.online && subSection === "metrics" && !liveMode
-      ? selectedLoadHours
-      : 0;
+    recordEnabled && node.online && !liveMode ? selectedLoadHours : 0;
   const {
     records: loadRecords,
     gpuDevices,
@@ -900,46 +991,14 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
     setSelectedPingHours(newHours);
   };
 
-  const activePresets = subSection === "metrics" ? loadPresets : pingPresets;
-  const activeHours =
-    subSection === "metrics" ? selectedLoadHours : selectedPingHours;
-  const activeRangeLoading =
-    subSection === "metrics" ? isLoadLoading : isPingLoading;
-  const handleActiveRangeChange =
-    subSection === "metrics" ? handleLoadRangeChange : handlePingRangeChange;
+  const pingHours = pingLive
+    ? Math.max(1, Math.min(1, pingMaxHours || 1))
+    : selectedPingHours;
 
   // Helper to format speeds (node fields are KB/s)
-  const formatSpeed = (kbps: number) => formatKbps(kbps);
+  const formatSpeed = (kbps: number) =>
+    formatKbps(kbps).replace(/\/S\b/g, "/s");
 
-  const renderProgressBar = (percent: number, colorClass: string) => {
-    const totalSegments = 32;
-    return (
-      <div className="flex items-center justify-between gap-[3px] w-full my-2 select-none">
-        {Array.from({ length: totalSegments }).map((_, i) => {
-          const isActive = (i / totalSegments) * 100 < percent;
-          return (
-            <div
-              key={i}
-              className="flex-1 flex items-center justify-center"
-              style={{ height: "4px" }}
-            >
-              {isActive ? (
-                <div
-                  className={`w-full h-full rounded-[1px] transition-all duration-300 ${colorClass}`}
-                />
-              ) : (
-                <div
-                  className={`w-[2px] h-[2px] rounded-full transition-all duration-300 ${
-                    zenFill.track
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
 
   const memPercent = node.online
     ? safePercent(node.memoryUsed, node.memoryTotal)
@@ -950,32 +1009,6 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
 
   // Design accent variables
   const textPrimary = zenText.primary;
-  const textMuted = zenText.muted;
-  const textBody = zenText.primary;
-  const textSecondary = zenText.secondary;
-
-  const SectionHeading = ({
-    children,
-    icon: Icon,
-  }: {
-    children: React.ReactNode;
-    icon?: React.ComponentType<{ className?: string }>;
-  }) => (
-    <div className="flex items-center gap-2.5">
-      {Icon ? (
-        <Icon
-          className="h-4 w-4 shrink-0 text-zen-fg-muted"
-          aria-hidden="true"
-        />
-      ) : null}
-      <span
-        className={`shrink-0 font-extrabold ${zenType.body} zen-track-tight ${textSecondary} font-mono`}
-      >
-        {children}
-      </span>
-      <span className="h-px flex-1 bg-zen-line" aria-hidden />
-    </div>
-  );
 
   const loadTotals = React.useMemo(
     () => loadTotalsFromNode(node),
@@ -1132,10 +1165,6 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
   const showNodeMeta = hasPublicRemark || hasPrivateRemark;
   const groupName = node.nodeGroup.trim();
   const groupHref = groupName ? `/?group=${encodeURIComponent(groupName)}` : "";
-  const headerGroupClass =
-    "text-sm font-black tracking-wide font-mono leading-none";
-  const headerMetaSepClass =
-    "text-sm font-black tracking-widest uppercase font-mono leading-none";
   const hasClientVersion = node.clientVersion.trim().length > 0;
   const hasExpiry = !isExpiryUnset(node.expiredAt);
   const hasRenewalPrice = node.price !== 0;
@@ -1187,109 +1216,142 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
   const expiryValueClass =
     expiryState?.kind === "expired" ||
     (expiryState?.kind === "active" && expiryState.daysRemaining <= 7)
-      ? "text-zen-danger font-bold"
+      ? "text-zen-danger font-semibold"
       : textPrimary;
-  const titleLineClass = `font-black leading-snug ${textPrimary} text-xl sm:text-2xl tracking-tight break-words`;
-  const titleRowRef = React.useRef<HTMLDivElement>(null);
-  const titleMeasureRef = React.useRef<HTMLSpanElement>(null);
-  const [{ first: titleFirstLine, rest: titleRest }, setTitleSplit] =
-    React.useState({
-      first: node.name,
-      rest: "",
-    });
+  const statusOnline = node.status === "online";
+  const statusOffline = node.status === "offline";
+  const statusText = (
+    statusOnline
+      ? t.hostOnline
+      : statusOffline
+        ? t.connectionOffline
+        : t.statusUnknown
+  ).replace(/^[●▲]\s*/, "");
+  const emptySpec = t.lblNone;
+  const specText = (value: string | number | null | undefined) => {
+    const text = value == null ? "" : String(value).trim();
+    return text || emptySpec;
+  };
+  const uptimeText =
+    node.online && node.uptimeSec > 0
+      ? formatUptime(node.uptimeSec, {
+          day: t.unitDay,
+          hour: t.unitHour,
+          minute: t.unitMin,
+          second: t.unitSec,
+        })
+      : "—";
+  const bootText =
+    node.online && node.uptimeSec > 0
+      ? formatUpdatedAt(Date.now() - node.uptimeSec * 1000)
+      : "—";
+  const priceText =
+    renewalPriceLabel == null
+      ? null
+      : hasRemainingValue
+        ? `${renewalPriceLabel} | ${remainingValueLabel} ${t.billingRemainingValueShort}`
+        : renewalPriceLabel;
 
-  React.useLayoutEffect(() => {
-    const row = titleRowRef.current;
-    const measureEl = titleMeasureRef.current;
-    if (!row || !measureEl) return;
+  const hardwareCard = (
+    <section className={`${detailCardClass} h-full`}>
+      <div className="mb-2.5 flex items-center gap-2">
+        <Cpu className="h-4 w-4 text-zen-fg-muted" strokeWidth={1.75} />
+        <h3 className={detailTitleClass}>{t.hardwareSpec}</h3>
+      </div>
+      <div className="grid grid-cols-1 gap-x-8 lg:grid-cols-2 lg:items-start">
+        <div>
+          <SpecRow label={t.lblCpuVendor}>{specText(node.cpuVendor)}</SpecRow>
+          <SpecRow label={t.lblCpuCores}>
+            {node.cpuCores} {t.lblCpuThreads}
+          </SpecRow>
+          <SpecRow label={t.lblArch}>{specText(node.arch)}</SpecRow>
+          <SpecRow label={t.lblSystemOs}>
+            <span className="inline-flex max-w-full items-center justify-end gap-1.5">
+              <OsIcon os={node.os} />
+              <span className="min-w-0 break-words text-left">
+                {specText(node.os)}
+              </span>
+            </span>
+          </SpecRow>
+          <SpecRow label={t.lblKernel}>{specText(node.kernelVersion)}</SpecRow>
+          <SpecRow label={t.lblVirtualization}>
+            {specText(node.virtualization)}
+          </SpecRow>
+          <SpecRow label={t.lblGpu}>{specText(node.gpuName)}</SpecRow>
+          <SpecRow label={t.lblUptimeSec}>{uptimeText}</SpecRow>
+        </div>
+        <div className="mt-2 border-t border-zen-card-line pt-2 lg:mt-0 lg:border-t-0 lg:pt-0">
+          <SpecRow label={t.lblKomariVersion}>
+            {hasClientVersion ? node.clientVersion.trim() : "—"}
+          </SpecRow>
+          <SpecRow label={t.lblBootTime}>{bootText}</SpecRow>
+          <SpecRow label={t.lblLastUpdated}>
+            {formatUpdatedAt(node.updatedAt)}
+          </SpecRow>
+          {hasExpiry ? (
+            <SpecRow label={t.lblExpiredAt}>
+              <span className={expiryValueClass}>{expiryLabel}</span>
+            </SpecRow>
+          ) : null}
+          {priceText ? (
+            <SpecRow label={t.lblRenewalPrice}>{priceText}</SpecRow>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
 
-    const run = () => {
-      const nameSlot = row.querySelector<HTMLElement>("[data-title-slot]");
-      const width = nameSlot?.clientWidth ?? 0;
-      if (width <= 0) {
-        setTitleSplit({ first: node.name, rest: "" });
-        return;
-      }
-      const next = splitTextAtFirstLine(node.name, width, measureEl);
-      setTitleSplit((previous) =>
-        previous.first === next.first && previous.rest === next.rest
-          ? previous
-          : next,
-      );
-    };
-
-    run();
-    const ro = new ResizeObserver(run);
-    ro.observe(row);
-    document.fonts?.addEventListener("loadingdone", run);
-    return () => {
-      ro.disconnect();
-      document.fonts?.removeEventListener("loadingdone", run);
-    };
-  }, [node.name]);
+  const chartTimeRange = pick(liveTimeRange, selectedLoadHours);
+  const chartHas = (liveOk: boolean, histOk: boolean) => pick(liveOk, histOk);
 
   return (
-    <div
-      className={`km-instance-detail font-sans ${zenType.body} space-y-5 md:space-y-6 pt-1 pb-4`}
-    >
-      {/* Title block — back inline with node name */}
-      <DetailSection delay={0} className="space-y-3 md:space-y-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-x-10 lg:gap-x-14">
-          <div className="min-w-0 flex-1">
-            <span
-              ref={titleMeasureRef}
-              className={`${titleLineClass} pointer-events-none fixed left-[-9999px] top-0 opacity-0`}
-              aria-hidden="true"
-            />
-            <h2 className="absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0">
-              {node.name}
-            </h2>
-            <div ref={titleRowRef} className="flex items-center gap-x-3">
-              {onBack ? (
-                <button
-                  type="button"
-                  onClick={onBack}
-                  aria-label={t.backToList}
-                  className={`group inline-flex shrink-0 items-center gap-1.5 rounded-full border border-zen-line px-3 py-2 font-mono ${zenType.caption} font-bold tracking-wider leading-none cursor-pointer transition-all ${
-                    theme === "dark"
-                      ? "bg-zen-surface/50 text-zen-fg-muted hover:border-zen-fg-muted hover:text-zen-fg-strong hover:bg-zen-elevate"
-                      : "bg-zen-surface/80 text-zen-fg-subtle hover:border-zen-fg-faint hover:text-zen-fg-strong hover:bg-zen-fill-muted/20"
-                  }`}
-                >
-                  <ArrowLeft className="h-3.5 w-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
-                  {t.backToList}
-                </button>
-              ) : null}
-              <Flag flag={node.flag} className="h-6 w-6 shrink-0" />
-              <span
-                data-title-slot
-                className="min-w-0 flex-1"
-                aria-hidden="true"
-              >
-                <span className={titleLineClass}>{titleFirstLine}</span>
-              </span>
-            </div>
-            {titleRest ? (
-              <p className={titleLineClass} aria-hidden="true">
-                {titleRest}
-              </p>
-            ) : null}
-          </div>
+    <div className="km-instance-detail space-y-4 pb-2 font-sans text-sm">
+      <DetailSection delay={0}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label={t.backToList}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zen-fg-muted hover:bg-zen-elevate hover:text-zen-fg-strong"
+            >
+              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          ) : null}
+          <span
+            className={`h-2 w-2 shrink-0 rounded-full ${
+              statusOnline
+                ? "bg-zen-online"
+                : statusOffline
+                  ? "bg-zen-danger"
+                  : "bg-zen-fg-faint"
+            }`}
+            aria-hidden
+          />
+          <h2 className="min-w-0 text-lg font-semibold tracking-tight text-zen-fg-strong break-words sm:text-xl">
+            {node.name}
+          </h2>
+          <span
+            className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+              statusOnline
+                ? "bg-zen-online-bg text-zen-online"
+                : "bg-zen-fill-muted/35 text-zen-fg-muted"
+            }`}
+          >
+            {statusText}
+          </span>
           {hasHeaderMeta ? (
-            <div className="hidden max-w-full flex-wrap items-center gap-x-3 gap-y-1.5 md:inline-flex leading-normal">
+            <div className="ml-auto flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zen-fg-muted">
               {groupName ? (
                 <Link
                   to={groupHref}
-                  className={`${headerGroupClass} ${textSecondary} shrink-0 transition-colors hover:text-zen-accent`}
+                  className="shrink-0 font-medium hover:text-zen-accent"
                 >
                   {groupName}
                 </Link>
               ) : null}
               {showSepAfterGroup ? (
-                <span
-                  className={`${headerMetaSepClass} font-light opacity-40 ${textMuted} shrink-0 select-none`}
-                  aria-hidden
-                >
+                <span className="text-zen-fg-faint" aria-hidden>
                   /
                 </span>
               ) : null}
@@ -1308,833 +1370,391 @@ export function NodeDetail({ node, lang, theme, onBack }: NodeDetailProps) {
       </DetailSection>
 
       {showNodeMeta ? (
-        <DetailSection delay={60} className="space-y-2.5">
+        <DetailSection delay={40} className="space-y-2">
           {hasPublicRemark ? (
-            <div
-              className={`font-mono ${zenType.data} leading-relaxed ${
-                zenText.secondary
-              }`}
-            >
-              <span
-                className={`mb-1 block ${zenType.label} font-bold uppercase zen-track-tight ${
-                  zenText.subtle
-                }`}
-              >
+            <p className="whitespace-pre-wrap break-words text-zen-fg">
+              <span className="mb-0.5 block text-xs text-zen-fg-muted">
                 {t.publicRemark}
               </span>
-              <p className={`whitespace-pre-wrap break-words ${textPrimary}`}>
-                {publicRemarkText}
-              </p>
-            </div>
+              {publicRemarkText}
+            </p>
           ) : null}
           {hasPrivateRemark ? (
-            <div
-              className={`font-mono ${zenType.data} leading-relaxed ${
-                zenText.secondary
-              }`}
-            >
-              <span
-                className={`mb-1 block ${zenType.label} font-bold uppercase zen-track-tight ${
-                  zenText.subtle
-                }`}
-              >
+            <p className="whitespace-pre-wrap break-words text-zen-fg">
+              <span className="mb-0.5 block text-xs text-zen-fg-muted">
                 {t.privateRemark}
               </span>
-              <p className={`whitespace-pre-wrap break-words ${textPrimary}`}>
-                {privateRemarkText}
-              </p>
-            </div>
+              {privateRemarkText}
+            </p>
           ) : null}
         </DetailSection>
       ) : null}
 
       {node.online ? (
         <>
-          {/* Main 2x2 Mono Section Grid */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 pt-1">
-            {/* Column 1: Hardware Specifications */}
-            <DetailSection delay={80} className="h-full">
-              <DetailPanel className="h-full">
-                <SectionHeading icon={Cpu}>{t.hardwareSpec}</SectionHeading>
-                <div
-                  className={`grid grid-cols-2 gap-y-3 ${zenType.data} font-mono border-b pb-6 border-transparent`}
-                >
-                  <span className={textMuted}>{t.lblCpuVendor}</span>
-                  <span className={`font-bold ${textPrimary}`}>
-                    {node.cpuVendor}
-                  </span>
-
-                  <span className={textMuted}>{t.lblCpuCores}</span>
-                  <span className={`font-bold ${textPrimary}`}>
-                    {node.cpuCores} {t.lblCpuThreads}
-                  </span>
-
-                  <span className={textMuted}>{t.lblArch}</span>
-                  <span className={`font-bold ${textPrimary}`}>
-                    {node.arch}
-                  </span>
-
-                  <span className={textMuted}>{t.lblSystemOs}</span>
-                  <span
-                    className={`font-bold ${textPrimary} flex items-center gap-2`}
-                  >
-                    <OsIcon os={node.os} />
-                    {node.os}
-                  </span>
-
-                  {node.kernelVersion ? (
-                    <>
-                      <span className={textMuted}>{t.lblKernel}</span>
-                      <span className={`font-bold ${textPrimary} break-all`}>
-                        {node.kernelVersion}
-                      </span>
-                    </>
-                  ) : null}
-
-                  {node.virtualization ? (
-                    <>
-                      <span className={textMuted}>{t.lblVirtualization}</span>
-                      <span className={`font-bold ${textPrimary}`}>
-                        {node.virtualization}
-                      </span>
-                    </>
-                  ) : null}
-
-                  {node.gpuName ? (
-                    <>
-                      <span className={textMuted}>{t.lblGpu}</span>
-                      <span className={`font-bold ${textPrimary} break-all`}>
-                        {node.gpuName}
-                      </span>
-                    </>
-                  ) : null}
-
-                  <span className={textMuted}>{t.lblUptimeSec}</span>
-                  <span className={`font-bold ${textPrimary}`}>
-                    {node.online && node.uptimeSec > 0
-                      ? formatUptime(node.uptimeSec, {
-                          day: t.unitDay,
-                          hour: t.unitHour,
-                          minute: t.unitMin,
-                          second: t.unitSec,
-                        })
-                      : "—"}
-                  </span>
-
-                  {hasClientVersion ? (
-                    <>
-                      <span className={textMuted}>{t.lblKomariVersion}</span>
-                      <span className={`font-bold ${textPrimary}`}>
-                        {node.clientVersion.trim()}
-                      </span>
-                    </>
-                  ) : null}
-
-                  {expiryLabel ? (
-                    <>
-                      <span className={textMuted}>{t.lblExpiredAt}</span>
-                      <span className={`font-bold ${expiryValueClass}`}>
-                        {expiryLabel}
-                      </span>
-                    </>
-                  ) : null}
-
-                  <span className={textMuted}>{t.lblLastUpdated}</span>
-                  <span className={`font-bold ${textPrimary}`}>
-                    {formatUpdatedAt(node.updatedAt)}
-                  </span>
-
-                  {hasRenewalPrice && renewalPriceLabel ? (
-                    <>
-                      <span className={textMuted}>{t.lblRenewalPrice}</span>
-                      <span
-                        className={`inline-flex flex-wrap items-baseline gap-y-0.5 font-bold ${textPrimary}`}
-                      >
-                        {hasRemainingValue ? (
-                          <>
-                            <span>
-                              {renewalPriceLabel}｜{remainingValueLabel}
-                            </span>
-                            <span
-                              className={`ml-1 ${zenType.label} ${textMuted} font-bold uppercase leading-none opacity-70`}
-                              title={t.billingRemainingValueTitle}
-                            >
-                              {t.billingRemainingValueShort}
-                            </span>
-                          </>
-                        ) : (
-                          <span>{renewalPriceLabel}</span>
-                        )}
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-              </DetailPanel>
+          <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+            <DetailSection delay={60} className="h-full">
+              {hardwareCard}
             </DetailSection>
-
-            {/* Column 2: System Loads & Memory */}
-            <DetailSection delay={140} className="h-full">
-              <DetailPanel className="h-full">
-                <SectionHeading icon={Activity}>
-                  {t.capacityLoads}
-                </SectionHeading>
-                <div className="space-y-6">
+            <DetailSection delay={90} className="h-full">
+              <section className={`${detailCardClass} h-full`}>
+                <div className="mb-3 flex items-center gap-2">
+                  <Activity
+                    className="h-4 w-4 text-zen-fg-muted"
+                    strokeWidth={1.75}
+                  />
+                  <h3 className={detailTitleClass}>{t.capacityLoads}</h3>
+                </div>
+                <div className="flex flex-col gap-3.5">
+                  <LoadMeter
+                    label={t.lblCpuLoadUtil}
+                    value={formatPercent(node.cpuUsage)}
+                    percent={node.cpuUsage}
+                    color="var(--zen-series-cpu)"
+                  />
+                  <LoadMeter
+                    label={t.lblLoadAvg}
+                    value={node.loadAvg || "—"}
+                    hint={t.loadAvgHint}
+                    valueInline
+                    track="none"
+                  />
+                  <LoadMeter
+                    label={t.lblMemoryAllocated}
+                    value={`${formatStoragePair(node.memoryUsed, node.memoryTotal)} · ${formatPercent(memPercent)}`}
+                    percent={memPercent}
+                    color="var(--zen-series-mem)"
+                  />
+                  <LoadMeter
+                    label="SWAP"
+                    value={formatStoragePair(node.swapUsed, node.swapTotal)}
+                    track="none"
+                  />
+                  <LoadMeter
+                    label={t.lblDisk}
+                    value={`${formatStoragePair(node.diskUsed, node.diskTotal)} · ${formatPercent(diskPercent)}`}
+                    percent={diskPercent}
+                    color="var(--zen-series-disk)"
+                  />
                   <div>
-                    <div
-                      className={`flex justify-between ${zenType.data} ${textSecondary} mb-2 tracking-wider font-mono`}
-                    >
-                      <span>{t.lblCpuLoadUtil}</span>
-                      <span
-                        className={`font-black ${textPrimary} font-mono text-xs`}
-                      >
-                        {node.cpuUsage.toFixed(1)}%
-                      </span>
-                    </div>
-                    {renderProgressBar(node.cpuUsage, "bg-zen-accent/80")}
-                    <div
-                      className={`${zenType.caption} ${textMuted} mt-2 font-mono`}
-                    >
-                      {t.lblLoadAvg} [{node.loadAvg}]
-                    </div>
-                  </div>
-
-                  <div>
-                    <div
-                      className={`flex justify-between ${zenType.data} ${textSecondary} mb-2 tracking-wider font-mono`}
-                    >
-                      <span>{t.lblMemoryAllocated}</span>
-                      <span
-                        className={`font-black ${textPrimary} font-mono text-xs`}
-                      >
-                        {formatStoragePair(node.memoryUsed, node.memoryTotal)}
-                      </span>
-                    </div>
-                    {renderProgressBar(memPercent, "bg-zen-chart-mem/80")}
-                    <div
-                      className={`${zenType.caption} ${textMuted} mt-2 font-mono`}
-                    >
-                      SWAP: {formatStoragePair(node.swapUsed, node.swapTotal)}
-                    </div>
-                  </div>
-
-                  <div className="pt-2">
-                    <div
-                      className={`flex justify-between ${zenType.data} ${textSecondary} mb-2 tracking-wider font-mono`}
-                    >
-                      <span>{t.lblDisk}</span>
-                      <span
-                        className={`font-black ${textPrimary} font-mono text-xs`}
-                      >
-                        {node.diskUsed.toFixed(1)} GB /{" "}
-                        {node.diskTotal.toFixed(1)} GB
-                      </span>
-                    </div>
-                    {renderProgressBar(diskPercent, "bg-zen-chart-load/80")}
-                  </div>
-
-                  {/* Network RX/TX */}
-                  <div className="pt-2">
-                    <div
-                      className={`flex items-center gap-2 ${zenType.data} ${textSecondary} mb-3 tracking-wider font-mono uppercase`}
-                    >
-                      <span className="font-bold shrink-0">
-                        {t.lblNetworkSpeedRxTx}
-                      </span>
-                      <span className="h-px flex-1 bg-zen-line" aria-hidden />
-                    </div>
-                    <div
-                      className={`grid grid-cols-1 min-[420px]:grid-cols-2 gap-x-4 gap-y-3 ${zenType.data} font-mono`}
-                    >
-                      {/* Left: current in/out speeds */}
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2">
-                          <span
-                            className={`inline-flex items-center gap-1.5 min-w-0 whitespace-nowrap ${textMuted} uppercase font-bold tracking-wider`}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-zen-chart-net-in animate-pulse shrink-0" />
-                            {t.lblInboundRxShort}
-                          </span>
-                          <span
-                            className={`font-black ${textPrimary} whitespace-nowrap shrink-0 tabular-nums`}
-                          >
-                            {formatSpeed(node.netSpeedIn)}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2">
-                          <span
-                            className={`inline-flex items-center gap-1.5 min-w-0 whitespace-nowrap ${textMuted} uppercase font-bold tracking-wider`}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-zen-chart-net-out animate-pulse shrink-0" />
-                            {t.lblOutboundTxShort}
-                          </span>
-                          <span
-                            className={`font-black ${textPrimary} whitespace-nowrap shrink-0 tabular-nums`}
-                          >
-                            {formatSpeed(node.netSpeedOut)}
-                          </span>
-                        </div>
+                    <div className="flex flex-col gap-2 min-[520px]:flex-row min-[520px]:items-center">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <NetSpeedRow
+                          dot="var(--zen-series-net-in)"
+                          label={t.lblInboundRxShort}
+                          speed={formatSpeed(node.netSpeedIn)}
+                          totalLabel={t.lblDownloaded}
+                          total={formatTrafficGb(node.bandwidthUsedIn)}
+                        />
+                        <NetSpeedRow
+                          dot="var(--zen-series-net-out)"
+                          label={t.lblOutboundTxShort}
+                          speed={formatSpeed(node.netSpeedOut)}
+                          totalLabel={t.lblUploaded}
+                          total={formatTrafficGb(node.bandwidthUsedOut)}
+                        />
                       </div>
-                      {/* Right: cumulative traffic */}
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2">
+                      <div className="flex items-center justify-between gap-3 border-zen-card-line text-[13px] tabular-nums min-[520px]:self-stretch min-[520px]:border-l min-[520px]:pl-4">
+                        {node.bandwidthTotal <= 0 ? (
                           <span
-                            className={`${textMuted} uppercase font-bold tracking-wider whitespace-nowrap`}
+                            className={`inline-flex shrink-0 rounded-sm border px-1 py-px text-[10px] font-bold leading-none ${unlimitedTrafficBadgeClass}`}
                           >
-                            {t.lblDownloaded}
+                            <span className={unlimitedTrafficSymbolClass}>
+                              ∞
+                            </span>
                           </span>
-                          <span
-                            className={`font-bold ${textPrimary} whitespace-nowrap shrink-0 tabular-nums`}
-                          >
-                            {formatTrafficGb(node.bandwidthUsedIn)}
+                        ) : (
+                          <span className="text-zen-fg-muted">
+                            {getTrafficTypeFullLabel(node.trafficLimitType, t)}
                           </span>
-                        </div>
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-2">
-                          <span
-                            className={`${textMuted} uppercase font-bold tracking-wider whitespace-nowrap`}
-                          >
-                            {t.lblUploaded}
-                          </span>
-                          <span
-                            className={`font-bold ${textPrimary} whitespace-nowrap shrink-0 tabular-nums`}
-                          >
-                            {formatTrafficGb(node.bandwidthUsedOut)}
-                          </span>
-                        </div>
+                        )}
+                        <span className="font-semibold text-zen-fg-strong">
+                          {formatNodeTraffic(node)}
+                        </span>
                       </div>
-                    </div>
-                    <div
-                      className={`flex justify-between items-baseline pt-3 mt-3 border-t ${zenBorder.line} ${zenType.caption} font-mono`}
-                    >
-                      {node.bandwidthTotal <= 0 ? (
-                        <span
-                          className={`inline-flex shrink-0 px-1 py-px rounded-sm border ${zenType.micro} font-bold tracking-wide leading-none ${unlimitedTrafficBadgeClass}`}
-                        >
-                          <span className={unlimitedTrafficSymbolClass}>∞</span>
-                        </span>
-                      ) : (
-                        <span
-                          className={`${textMuted} uppercase font-bold tracking-wider`}
-                        >
-                          {getTrafficTypeFullLabel(node.trafficLimitType, t)}
-                        </span>
-                      )}
-                      <span className={`font-bold ${textPrimary}`}>
-                        {formatNodeTraffic(node)}
-                      </span>
                     </div>
                   </div>
                 </div>
-              </DetailPanel>
+              </section>
             </DetailSection>
           </div>
 
-          {/* [05] UNIFIED DYNAMIC HARDWARE TIMESERIES & SYSTEM PROCESS TELEMETRY / LATENCY MONITORING */}
-          {(recordEnabled || node.online) && (
-            <DetailSection delay={200} className="space-y-4 pt-6">
-              <DetailPanel>
-                <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-h-10 min-w-0 flex-1 items-center">
-                    <div className="max-w-full min-w-0 overflow-x-auto rounded-full bg-zen-fill-muted/20 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                      <ZenTabControl
-                        ariaLabel={t.detailedReport}
-                        tabs={[
-                          {
-                            id: "metrics",
-                            label: t.tabMetrics,
-                            leading: (
-                              <Gauge
-                                className="h-3.5 w-3.5"
-                                aria-hidden="true"
-                              />
-                            ),
-                          },
-                          ...(recordEnabled
-                            ? [
-                                {
-                                  id: "latency",
-                                  label: t.tabLatency,
-                                  leading: (
-                                    <RadioTower
-                                      className="h-3.5 w-3.5"
-                                      aria-hidden="true"
-                                    />
-                                  ),
-                                },
-                              ]
-                            : []),
-                        ]}
-                        value={subSection}
-                        onChange={(id) =>
-                          setSubSection(id as "metrics" | "latency")
-                        }
-                        variant="pill"
-                        indicatorClassName="zen-glass-segment rounded-full"
-                        tabClassName={`rounded-full px-2.5 py-1.5 ${zenTouch.btn} whitespace-nowrap font-mono font-extrabold ${zenType.caption}`}
-                        activeClassName="text-zen-accent"
-                        idleClassName={`${zenText.subtle} opacity-75 hover:text-zen-fg-strong hover:opacity-100`}
-                        className="gap-0 shrink-0 select-none"
-                      />
-                    </div>
-                  </div>
+          <DetailSection delay={120} className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2">
+                <Activity
+                  className="h-4 w-4 text-zen-fg-muted"
+                  strokeWidth={1.75}
+                />
+                <h3 className={detailTitleClass}>{t.tabMetrics}</h3>
+              </div>
+              <DetailRangeChips
+                hours={recordEnabled ? loadHistoryHours : []}
+                value={selectedLoadHours}
+                onChange={(hours) => {
+                  setLiveMode(false);
+                  handleLoadRangeChange(hours);
+                }}
+                disabled={!liveMode && isLoadLoading}
+                messages={t}
+                showLive
+                isLive={liveMode}
+                onLive={() => setLiveMode(true)}
+              />
+            </div>
 
-                  <div className="flex w-full min-w-0 justify-start overflow-hidden sm:w-auto sm:shrink-0 sm:justify-end sm:self-center">
-                    <HistoryRangeSelector
-                      presets={activePresets}
-                      value={activeHours}
-                      onChange={(h) => {
-                        if (subSection === "metrics") setLiveMode(false);
-                        handleActiveRangeChange(h);
-                      }}
-                      disabled={activeRangeLoading}
+            <div className="relative">
+              {!liveMode && loadError ? (
+                <HistoryError
+                  lang={lang}
+                  retry={retryLoad}
+                  loading={isLoadLoading}
+                />
+              ) : null}
+              {!liveMode && isLoadLoading ? (
+                <DetailLoading label={t.loadingData} />
+              ) : null}
+              <div
+                className={`grid grid-cols-1 gap-3 lg:grid-cols-3 ${metricsPanelClass} ${liveMode ? livePanelClass : ""}`}
+              >
+                <div className={chartCardClass}>
+                  <MiniLineChart
+                    icon={Cpu}
+                    data={pick(live.cpu, displayedCpuHistory)}
+                    color={ZEN_CHART.cpu}
+                    maxVal={100}
+                    unitMode="percent"
+                    title={t.cpu}
+                    label1="CPU"
+                    theme={theme}
+                    timeRange={chartTimeRange}
+                    messages={t}
+                    hasData={chartHas(liveHasData, cpuHist.hasData || loadHist.hasData)}
+                    timestamps={chartTimestamps}
+                    extraSeries={cpuLoadExtraSeries}
+                  />
+                </div>
+                <div className={chartCardClass}>
+                  <MiniLineChart
+                    icon={MemoryStick}
+                    data={pick(live.mem, displayedMemHistory)}
+                    data2={pick(live.swap, displayedSwapHistory)}
+                    color={ZEN_CHART.mem}
+                    color2={ZEN_CHART.swap}
+                    maxVal={100}
+                    unitMode="percent"
+                    title={t.lblMemoryUsage}
+                    label1="RAM"
+                    label2="SWAP"
+                    theme={theme}
+                    timeRange={chartTimeRange}
+                    messages={t}
+                    hasData={chartHas(liveHasData, memHist.hasData || swapHist.hasData)}
+                    timestamps={chartTimestamps}
+                  />
+                </div>
+                <div className={chartCardClass}>
+                  <MiniLineChart
+                    icon={HardDrive}
+                    data={pick(live.disk, displayedDiskHistory)}
+                    color={ZEN_CHART.disk}
+                    maxVal={100}
+                    unitMode="percent"
+                    title={t.lblDiskCoverage}
+                    label1={t.lblDiskUsedShort}
+                    theme={theme}
+                    timeRange={chartTimeRange}
+                    messages={t}
+                    hasData={chartHas(liveHasData, diskHist.hasData)}
+                    timestamps={chartTimestamps}
+                  />
+                </div>
+                <div className={chartCardClass}>
+                  <MiniLineChart
+                    icon={ArrowLeftRight}
+                    data={pick(live.netIn, displayedNetInHistory)}
+                    data2={pick(live.netOut, displayedNetOutHistory)}
+                    color={ZEN_CHART.netIn}
+                    color2={ZEN_CHART.netOut}
+                    maxVal={pick(
+                      Math.max(1, ...live.netIn, ...live.netOut),
+                      netRawMax,
+                    )}
+                    unitMode="speed"
+                    title={t.lblNetworkSpeedRxTx}
+                    label1="RX"
+                    label2="TX"
+                    theme={theme}
+                    timeRange={chartTimeRange}
+                    messages={t}
+                    hasData={chartHas(
+                      liveHasData,
+                      netInHist.hasData || netOutHist.hasData,
+                    )}
+                    timestamps={chartTimestamps}
+                  />
+                </div>
+                <div className={chartCardClass}>
+                  <MiniLineChart
+                    icon={Layers}
+                    data={pick(live.tcp, displayedTcpHistory)}
+                    data2={pick(live.udp, displayedUdpHistory)}
+                    color={ZEN_CHART.tcp}
+                    color2={ZEN_CHART.udp}
+                    maxVal={pick(
+                      Math.max(10, ...live.tcp, ...live.udp),
+                      Math.max(
+                        10,
+                        ...numOnly(displayedTcpHistory),
+                        ...numOnly(displayedUdpHistory),
+                      ),
+                    )}
+                    unitMode="count"
+                    title={t.lblNetworkConnections}
+                    label1="TCP"
+                    label2="UDP"
+                    theme={theme}
+                    timeRange={chartTimeRange}
+                    messages={t}
+                    hasData={chartHas(liveHasData, tcpHist.hasData || udpHist.hasData)}
+                    timestamps={chartTimestamps}
+                  />
+                </div>
+                <div className={chartCardClass}>
+                  <MiniLineChart
+                    icon={List}
+                    data={pick(live.proc, displayedProcessesHistory)}
+                    color={ZEN_CHART.proc}
+                    maxVal={pick(
+                      Math.max(10, ...live.proc),
+                      Math.max(10, ...numOnly(displayedProcessesHistory)),
+                    )}
+                    unitMode="count"
+                    title={t.lblProcessCount}
+                    label1={t.lblActiveProc}
+                    theme={theme}
+                    timeRange={chartTimeRange}
+                    messages={t}
+                    hasData={chartHas(liveHasData, procHist.hasData)}
+                    timestamps={chartTimestamps}
+                  />
+                </div>
+                {!liveMode && tempHist.hasData && currentTemperature > 0 ? (
+                  <div className={chartCardClass}>
+                    <MiniLineChart
+                      data={displayedTemperatureHistory}
+                      color="var(--zen-warning)"
+                      maxVal={Math.max(100, ...numOnly(displayedTemperatureHistory))}
+                      unitMode="count"
+                      title={t.lblSystemTemperature}
+                      label1={t.lblSystemTemperature}
                       theme={theme}
+                      timeRange={selectedLoadHours}
                       messages={t}
-                      showLive={subSection === "metrics"}
-                      isLive={subSection === "metrics" && liveMode}
-                      onLive={() => setLiveMode(true)}
-                      liveLabel={t.live}
+                      hasData
+                      timestamps={histTimestamps}
+                      valueFormatter={(value) => `${value.toFixed(0)} °C`}
                     />
                   </div>
-                </div>
-
-                <div className="relative">
-                  {subSection === "metrics" && !liveMode && loadError && (
-                    <HistoryError
-                      lang={lang}
-                      retry={retryLoad}
-                      loading={isLoadLoading}
-                    />
-                  )}
-                  {subSection === "metrics" && isLoadLoading && (
-                    <div className="absolute inset-0 z-30 flex items-center justify-center select-none bg-transparent pointer-events-none">
+                ) : null}
+                {!liveMode
+                  ? gpuCharts.map((gpu) => (
                       <div
-                        className={`px-4 py-2.5 ${zenType.caption} uppercase font-bold zen-track-tight font-mono flex items-center gap-2.5 border rounded-sm shadow-sm ${
-                          theme === "dark"
-                            ? "bg-zen-surface/95 border-zen-border-muted text-zen-accent"
-                            : "bg-zen-surface/95 border-zen-border text-zen-accent"
-                        }`}
+                        key={`${gpu.device_index}:${gpu.device_name}`}
+                        className={chartCardClass}
                       >
-                        <svg
-                          className="animate-spin h-3.5 w-3.5 text-zen-accent"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        <span>{t.loadingData}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {subSection === "latency" && isPingLoading && (
-                    <div className="absolute inset-0 z-30 flex items-center justify-center select-none bg-transparent pointer-events-none">
-                      <div
-                        className={`px-4 py-2.5 ${zenType.caption} uppercase font-bold zen-track-tight font-mono flex items-center gap-2.5 border rounded-sm shadow-sm ${
-                          theme === "dark"
-                            ? "bg-zen-surface/95 border-zen-border-muted text-zen-accent"
-                            : "bg-zen-surface/95 border-zen-border text-zen-accent"
-                        }`}
-                      >
-                        <svg
-                          className="animate-spin h-3.5 w-3.5 text-zen-accent"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                        <span>{t.loadingData}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {subSection === "metrics" ? (
-                    <>
-                      {/* One continuous grid keeps card order stable at every breakpoint. */}
-                      <div
-                        className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ${metricsPanelClass} ${liveMode ? livePanelClass : ""} [&>div]:rounded-xl [&>div]:border [&>div]:border-zen-line [&>div]:bg-zen-elevate/35 [&>div]:px-4 [&>div]:py-3.5`}
-                      >
-                        {/* Chart 1: CPU Utilisation */}
                         <MiniLineChart
-                          data={pick(live.cpu, displayedCpuHistory)}
-                          color={ZEN_CHART.cpu}
+                          data={gpu.utilization}
+                          data2={gpu.memory}
+                          color="var(--zen-series-cpu)"
+                          color2={ZEN_CHART.mem}
                           maxVal={100}
                           unitMode="percent"
-                          title={t.cpu}
-                          label1="CPU"
+                          title={`${t.lblGpu} ${gpu.device_index + 1}`}
+                          label1={t.lblGpuUtilization}
+                          label2={t.lblGpuMemory}
                           theme={theme}
-                          timeRange={pick(liveTimeRange, selectedLoadHours)}
+                          timeRange={selectedLoadHours}
                           messages={t}
-                          hasData={pick(
-                            liveHasData,
-                            cpuHist.hasData || loadHist.hasData,
-                          )}
-                          timestamps={chartTimestamps}
-                          extraSeries={cpuLoadExtraSeries}
+                          hasData={
+                            gpu.utilization.some(isNum) || gpu.memory.some(isNum)
+                          }
+                          timestamps={gpu.timestamps}
                           subMetrics={
-                            <div
-                              className={`flex justify-between items-center gap-3 ${zenType.caption} font-mono ${textMuted}`}
-                            >
-                              <span>
-                                {t.lblLoadAvgShort} [{node.load5}]
+                            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-zen-fg-muted">
+                              <span className="min-w-0 flex-1 truncate" title={gpu.device_name}>
+                                {gpu.device_name}
                               </span>
-                              <span>
-                                {t.lblCpuCores} {node.cpuCores}
-                              </span>
-                            </div>
-                          }
-                        />
-
-                        {/* Chart 2: Memory & SWAP */}
-                        <MiniLineChart
-                          data={pick(live.mem, displayedMemHistory)}
-                          data2={pick(live.swap, displayedSwapHistory)}
-                          color={ZEN_CHART.mem}
-                          color2={ZEN_CHART.swap}
-                          maxVal={100}
-                          unitMode="percent"
-                          title={t.lblMemoryUsage}
-                          label1="RAM"
-                          label2="SWAP"
-                          theme={theme}
-                          timeRange={pick(liveTimeRange, selectedLoadHours)}
-                          messages={t}
-                          hasData={pick(
-                            liveHasData,
-                            memHist.hasData || swapHist.hasData,
-                          )}
-                          timestamps={chartTimestamps}
-                          subMetrics={
-                            <div
-                              className={`grid grid-cols-2 ${zenType.caption} font-mono leading-tight`}
-                            >
-                              <div
-                                className={`flex justify-between pr-4 border-r ${zenBorder.line}`}
-                              >
-                                <span className={textMuted}>RAM:</span>
-                                <span className={textPrimary}>
-                                  {formatStoragePair(
-                                    node.memoryUsed,
-                                    node.memoryTotal,
-                                  )}
-                                </span>
-                              </div>
-                              <div className="flex justify-between pl-4">
-                                <span className={textMuted}>SWAP:</span>
-                                <span className={textPrimary}>
-                                  {formatStoragePair(
-                                    node.swapUsed,
-                                    node.swapTotal,
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          }
-                        />
-
-                        {/* Chart 3: Disk Partition Map */}
-                        <MiniLineChart
-                          data={pick(live.disk, displayedDiskHistory)}
-                          color={ZEN_CHART.load}
-                          maxVal={100}
-                          unitMode="percent"
-                          title={t.lblDiskCoverage}
-                          label1={t.lblDiskUsedShort}
-                          theme={theme}
-                          timeRange={pick(liveTimeRange, selectedLoadHours)}
-                          messages={t}
-                          hasData={pick(liveHasData, diskHist.hasData)}
-                          timestamps={chartTimestamps}
-                          subMetrics={
-                            <div
-                              className={`${zenType.caption} font-mono ${textMuted}`}
-                            >
-                              <span>{t.lblUsedTotal} </span>
-                              <span className={textPrimary}>
-                                {node.diskUsed.toFixed(1)} /{" "}
-                                {node.diskTotal.toFixed(0)} GB
-                              </span>
-                            </div>
-                          }
-                        />
-
-                        {/* Chart 4: Network Traffic speeds */}
-                        <MiniLineChart
-                          data={pick(live.netIn, displayedNetInHistory)}
-                          data2={pick(live.netOut, displayedNetOutHistory)}
-                          color={ZEN_CHART.netIn}
-                          color2={ZEN_CHART.netOut}
-                          maxVal={pick(
-                            Math.max(1, ...live.netIn, ...live.netOut),
-                            netRawMax,
-                          )}
-                          unitMode="speed"
-                          title={t.lblNetworkSpeedRxTx}
-                          label1="RX"
-                          label2="TX"
-                          theme={theme}
-                          timeRange={pick(liveTimeRange, selectedLoadHours)}
-                          messages={t}
-                          hasData={pick(
-                            liveHasData,
-                            netInHist.hasData || netOutHist.hasData,
-                          )}
-                          timestamps={chartTimestamps}
-                          subMetrics={
-                            <div
-                              className={`grid grid-cols-2 ${zenType.caption} font-mono leading-tight`}
-                            >
-                              <div
-                                className={`flex justify-between pr-4 border-r ${zenBorder.line}`}
-                              >
-                                <span className={textMuted}>RX:</span>
-                                <span className="text-zen-chart-net-in font-bold">
-                                  {formatSpeed(node.netSpeedIn)}
-                                </span>
-                              </div>
-                              <div className="flex justify-between pl-4">
-                                <span className={textMuted}>TX:</span>
-                                <span className="text-zen-chart-net-out font-bold">
-                                  {formatSpeed(node.netSpeedOut)}
-                                </span>
-                              </div>
-                            </div>
-                          }
-                        />
-
-                        {/* Chart 5: Network Connections TCP/UDP */}
-                        <MiniLineChart
-                          data={pick(live.tcp, displayedTcpHistory)}
-                          data2={pick(live.udp, displayedUdpHistory)}
-                          color={ZEN_CHART.tcp}
-                          color2={ZEN_CHART.udp}
-                          maxVal={pick(
-                            Math.max(120, ...live.tcp, ...live.udp, 10),
-                            Math.max(
-                              120,
-                              ...numOnly(displayedTcpHistory),
-                              ...numOnly(displayedUdpHistory),
-                              10,
-                            ),
-                          )}
-                          unitMode="count"
-                          title={t.lblNetworkConnections}
-                          label1="TCP"
-                          label2="UDP"
-                          theme={theme}
-                          timeRange={pick(liveTimeRange, selectedLoadHours)}
-                          messages={t}
-                          hasData={pick(
-                            liveHasData,
-                            tcpHist.hasData || udpHist.hasData,
-                          )}
-                          timestamps={chartTimestamps}
-                          subMetrics={
-                            <div
-                              className={`grid grid-cols-2 ${zenType.caption} font-mono leading-tight`}
-                            >
-                              <div
-                                className={`flex justify-between pr-4 border-r ${zenBorder.line}`}
-                              >
-                                <span className={textMuted}>TCP:</span>
-                                <span className="text-zen-chart-tcp font-bold">
-                                  {node.tcpConnections ?? 0} {t.unitConnections}
-                                </span>
-                              </div>
-                              <div className="flex justify-between pl-4">
-                                <span className={textMuted}>UDP:</span>
-                                <span className="text-zen-chart-udp font-bold">
-                                  {node.udpConnections ?? 0} {t.unitConnections}
-                                </span>
-                              </div>
-                            </div>
-                          }
-                        />
-
-                        {/* Chart 6: Active Processes Count */}
-                        <MiniLineChart
-                          data={pick(live.proc, displayedProcessesHistory)}
-                          color={ZEN_CHART.load}
-                          maxVal={pick(
-                            Math.max(200, ...live.proc, 10),
-                            Math.max(
-                              200,
-                              ...numOnly(displayedProcessesHistory),
-                              10,
-                            ),
-                          )}
-                          unitMode="count"
-                          title={t.lblProcessCount}
-                          label1={t.lblActiveProc}
-                          theme={theme}
-                          timeRange={pick(liveTimeRange, selectedLoadHours)}
-                          messages={t}
-                          hasData={pick(liveHasData, procHist.hasData)}
-                          timestamps={chartTimestamps}
-                          subMetrics={
-                            <div
-                              className={`flex justify-between items-center ${zenType.caption} font-mono ${textMuted}`}
-                            >
-                              <span>
-                                {t.lblActiveProcesses}{" "}
-                                <span className="text-zen-chart-load font-bold">
-                                  {node.processesCount ?? 0}
-                                </span>
-                              </span>
-                              <span>{t.lblStatusOk}</span>
-                            </div>
-                          }
-                        />
-
-                        {tempHist.hasData && currentTemperature > 0 ? (
-                          <MiniLineChart
-                            data={displayedTemperatureHistory}
-                            color="var(--zen-warning)"
-                            maxVal={Math.max(
-                              100,
-                              ...numOnly(displayedTemperatureHistory),
-                            )}
-                            unitMode="count"
-                            title={t.lblSystemTemperature}
-                            label1={t.lblSystemTemperature}
-                            theme={theme}
-                            timeRange={selectedLoadHours}
-                            messages={t}
-                            hasData
-                            timestamps={histTimestamps}
-                            valueFormatter={(value) => `${value.toFixed(0)} °C`}
-                            subMetrics={
-                              <div
-                                className={`flex items-center justify-between ${zenType.caption} font-mono`}
-                              >
-                                <span className={textMuted}>
-                                  {t.lblSystemTemperature}
-                                </span>
-                                <span className="font-bold text-zen-warning tabular-nums">
-                                  {currentTemperature.toFixed(0)} °C
-                                </span>
-                              </div>
-                            }
-                          />
-                        ) : null}
-
-                        {gpuCharts.map((gpu) => (
-                          <MiniLineChart
-                            key={`${gpu.device_index}:${gpu.device_name}`}
-                            data={gpu.utilization}
-                            data2={gpu.memory}
-                            color="var(--zen-accent)"
-                            color2={ZEN_CHART.mem}
-                            maxVal={100}
-                            unitMode="percent"
-                            title={`${t.lblGpu.replace(/:$/, "")} ${gpu.device_index + 1}`}
-                            label1={t.lblGpuUtilization}
-                            label2={t.lblGpuMemory}
-                            theme={theme}
-                            timeRange={selectedLoadHours}
-                            messages={t}
-                            hasData={
-                              gpu.utilization.some(isNum) ||
-                              gpu.memory.some(isNum)
-                            }
-                            timestamps={gpu.timestamps}
-                            subMetrics={
-                              <div
-                                className={`flex flex-wrap items-center justify-between gap-x-4 gap-y-1 ${zenType.caption} font-mono`}
-                              >
-                                <span
-                                  className={`min-w-0 flex-1 truncate ${textMuted}`}
-                                  title={gpu.device_name}
-                                >
-                                  {gpu.device_name}
-                                </span>
-                                {gpu.reading ? (
-                                  <span className="inline-flex shrink-0 items-center gap-3 tabular-nums">
-                                    <span className={textPrimary}>
-                                      {formatStoragePair(
-                                        gpu.reading.memUsed / 1024 ** 3,
-                                        gpu.reading.memTotal / 1024 ** 3,
-                                      )}
-                                    </span>
-                                    <span className="font-bold text-zen-warning">
-                                      {gpu.reading.temperature} °C
-                                    </span>
+                              {gpu.reading ? (
+                                <span className="inline-flex shrink-0 items-center gap-3 tabular-nums">
+                                  <span className="font-medium text-zen-fg-strong">
+                                    {formatStoragePair(
+                                      gpu.reading.memUsed / 1024 ** 3,
+                                      gpu.reading.memTotal / 1024 ** 3,
+                                    )}
                                   </span>
-                                ) : null}
-                              </div>
-                            }
-                          />
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className={`min-h-[28rem] ${pingPanelClass}`}>
-                      <SectionErrorBoundary>
-                        <React.Suspense
-                          fallback={
-                            <div className="min-h-64 animate-pulse bg-zen-fill-muted/5 rounded-lg" />
+                                  <span className="font-semibold text-zen-warning">
+                                    {gpu.reading.temperature} °C
+                                  </span>
+                                </span>
+                              ) : null}
+                            </div>
                           }
-                        >
-                          <LatencyProbePanel
-                            uuid={node.id}
-                            hours={selectedPingHours}
-                            onLoadingChange={setIsPingLoading}
-                            selectedProbes={selectedProbes}
-                            onToggleProbe={handleToggleProbe}
-                            lang={lang}
-                            theme={theme}
-                            taskIds={pingTaskIds}
-                          />
-                        </React.Suspense>
-                      </SectionErrorBoundary>
-                    </div>
-                  )}
-                </div>
-              </DetailPanel>
+                        />
+                      </div>
+                    ))
+                  : null}
+              </div>
+            </div>
+          </DetailSection>
+
+          {recordEnabled ? (
+            <DetailSection delay={160}>
+              <section className={detailCardClass}>
+                <LatencyProbePanel
+                  uuid={node.id}
+                  hours={pingHours}
+                  onLoadingChange={setIsPingLoading}
+                  selectedProbes={selectedProbes}
+                  onToggleProbe={handleToggleProbe}
+                  lang={lang}
+                  theme={theme}
+                  taskIds={pingTaskIds}
+                  title={t.tabLatency}
+                  rangeSlot={
+                    <DetailRangeChips
+                      hours={pingHistoryHours}
+                      value={selectedPingHours}
+                      onChange={(hours) => {
+                        setPingLive(false);
+                        handlePingRangeChange(hours);
+                      }}
+                      disabled={isPingLoading}
+                      messages={t}
+                      showLive={pingMaxHours >= 1}
+                      isLive={pingLive}
+                      onLive={() => setPingLive(true)}
+                    />
+                  }
+                />
+              </section>
             </DetailSection>
-          )}
+          ) : null}
         </>
       ) : (
-        <DetailSection delay={80}>
-          <div className="py-20 text-center flex flex-col items-center justify-center space-y-4 font-sans select-none">
-            <span className="text-base font-bold tracking-widest text-zen-danger/75 uppercase">
+        <DetailSection delay={60} className="space-y-3">
+          {hardwareCard}
+          <section className={`${detailCardClass} py-10 text-center`}>
+            <p className="text-base font-semibold text-zen-danger/80">
               {t.vpsHostOffline}
-            </span>
-            <p
-              className={`max-w-md ${textSecondary} ${zenType.data} uppercase tracking-wider leading-relaxed`}
-            >
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zen-fg-muted">
               {t.hostOfflineWarning}
             </p>
-            <div
-              className={`${zenType.caption} tracking-wider ${textMuted} uppercase font-mono`}
-            >
+            <p className="mt-2 text-xs text-zen-fg-faint">
               {t.msgNodeOfflineAwaiting}
-            </div>
-          </div>
+            </p>
+          </section>
         </DetailSection>
       )}
     </div>

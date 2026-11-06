@@ -1,5 +1,6 @@
 import { HistoryError } from "@/components/SectionErrorBoundary";
 import React from "react";
+import { Wifi } from "lucide-react";
 import { usePingRecords } from "@/hooks/usePingRecords";
 import { useTimeChartScrub } from "@/hooks/useChartScrub";
 import { usePingChartViewport } from "@/hooks/usePingChartViewport";
@@ -21,7 +22,7 @@ import { formatMsg, translations, type Lang } from "@/lib/i18n";
 import { formatChartPointTime } from "@/lib/timeRangePresets";
 import { taskColor, taskPingVolatility } from "@/lib/recordTransform";
 import { zenType, zenTouch } from "@/lib/typography";
-import { zenFill, zenPopover, zenText } from "@/lib/zenSemantics";
+import { zenPopover, zenText } from "@/lib/zenSemantics";
 import { PingChartOverview } from "@/components/detail/PingChartOverview";
 import type { PingRecord, PingTaskInfo } from "@/types/records";
 
@@ -49,6 +50,18 @@ function timeToX(
   const [start, end] = viewRange;
   const span = Math.max(1, end - start);
   return paddingX + ((t - start) / span) * chartWidth;
+}
+
+function niceLatencyMax(value: number): number {
+  if (value <= 30) return 30;
+  if (value <= 60) return 60;
+  if (value <= 90) return 90;
+  if (value <= 120) return 120;
+  if (value <= 200) return 200;
+  if (value <= 300) return 300;
+  if (value <= 500) return 500;
+  const step = value <= 1000 ? 100 : 250;
+  return Math.ceil(value / step) * step;
 }
 
 function valueToY(
@@ -98,6 +111,8 @@ interface LatencyProbePanelProps {
   lang: Lang;
   theme: "light" | "dark";
   taskIds?: number[];
+  title?: string;
+  rangeSlot?: React.ReactNode;
 }
 
 export function LatencyProbePanel({
@@ -109,6 +124,8 @@ export function LatencyProbePanel({
   lang,
   theme,
   taskIds = EMPTY_IDS,
+  title,
+  rangeSlot,
 }: LatencyProbePanelProps) {
   const t = translations[lang];
   const [peakClipping, setPeakClipping] = React.useState(false);
@@ -240,7 +257,7 @@ export function LatencyProbePanel({
         maxLatencyInPoints(plan.bridgeSegments, 50),
       );
     }
-    return max;
+    return niceLatencyMax(max);
   }, [activeProbeIds, chartPlanByTask]);
 
   const overviewEnvelope = React.useMemo(
@@ -274,8 +291,8 @@ export function LatencyProbePanel({
   );
   const width = 1000;
   const height = 240;
-  const paddingX = 24;
-  const paddingY = 24;
+  const paddingX = 8;
+  const paddingY = 8;
   const chartWidth = width - paddingX * 2;
   const chartHeight = height - paddingY * 2;
 
@@ -376,8 +393,7 @@ export function LatencyProbePanel({
     `${val >= 100 ? val.toFixed(0) : val.toFixed(1)} ms`;
 
   const strokeColor =
-    theme === "dark" ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)";
-  const labelColor = `${zenText.subtle} font-mono`;
+    theme === "dark" ? "rgba(250, 249, 245, 0.08)" : "rgba(48, 48, 46, 0.08)";
 
   const xAxisLabels = React.useMemo(() => {
     if (!viewRange) return [];
@@ -522,76 +538,89 @@ export function LatencyProbePanel({
 
   if (tasks.length === 0 && !isLoading) {
     return (
-      <div
-        className={`py-12 text-center ${zenType.data} uppercase tracking-widest font-mono ${zenText.faint}`}
-      >
+      <div className="py-10 text-center text-sm text-zen-fg-muted">
         {t.pingNoTasks}
       </div>
     );
   }
 
+  const chartTitle = title ?? t.pingLatencyDetection;
+  const latencyTicks = [1, 0.75, 0.5, 0.25, 0].map((ratio) =>
+    `${Math.round(maxLatencyVal * ratio)} ms`,
+  );
+  const toggleClass = (active: boolean) =>
+    `inline-flex cursor-pointer items-center gap-1.5 text-sm ${
+      active
+        ? "font-medium text-zen-chip-fg"
+        : "text-zen-fg-muted hover:text-zen-fg-strong"
+    }`;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {error && <HistoryError lang={lang} retry={retry} loading={isLoading} />}
-      <div className="relative py-4 px-4 -mx-4 flex flex-col space-y-4 bg-transparent overflow-visible">
-        <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-2 select-none w-full">
-          <span
-            className={`font-extrabold tracking-wider uppercase ${zenType.body} ${zenText.primary} font-mono shrink-0`}
-          >
-            {t.pingLatencyDetection}
-          </span>
-          <div
-            className={`flex flex-wrap items-center justify-end gap-x-3.5 gap-y-1 ${zenType.caption} font-mono select-none font-bold shrink-0`}
-          >
-            {isZoomed ? (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex items-center gap-2">
+            <Wifi
+              className="h-4 w-4 text-zen-fg-muted"
+              strokeWidth={1.75}
+              aria-hidden
+            />
+            <h3 className="text-sm font-semibold leading-none text-zen-fg-strong">
+              {chartTitle}
+            </h3>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {rangeSlot}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {isZoomed ? (
+                <button
+                  type="button"
+                  onClick={resetZoom}
+                  className="cursor-pointer text-sm text-zen-fg-muted hover:text-zen-accent"
+                >
+                  {t.pingResetZoom}
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={resetZoom}
-                className={`${zenTouch.btn} ${zenText.subtle} hover:text-zen-accent transition-colors font-semibold`}
+                onClick={() => setPeakClipping(!peakClipping)}
+                aria-pressed={peakClipping}
+                className={toggleClass(peakClipping)}
               >
-                {t.pingResetZoom}
+                {t.pingSmooth}
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setPeakClipping(!peakClipping)}
-              aria-pressed={peakClipping}
-              className={`${zenTouch.btn} transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                peakClipping
-                  ? "text-zen-accent font-extrabold"
-                  : `${zenText.faint} font-semibold hover:text-zen-fg-strong`
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${peakClipping ? "bg-zen-accent animate-pulse" : zenFill.track}`}
-              />
-              <span>{t.pingSmooth}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setConnectBreakpoints(!connectBreakpoints)}
-              aria-pressed={connectBreakpoints}
-              className={`${zenTouch.btn} transition-all duration-150 cursor-pointer flex items-center gap-1.5 ${
-                connectBreakpoints
-                  ? "text-zen-accent font-extrabold"
-                  : `${zenText.faint} font-semibold hover:text-zen-fg-strong`
-              }`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${connectBreakpoints ? "bg-zen-accent animate-pulse" : zenFill.track}`}
-              />
-              <span>{t.pingConnectBreakpoints}</span>
-            </button>
-            <span className={zenText.subtle}>
-              {formatMsg(t.pingActiveProbes, {
-                count: activeProbesList.length,
-              })}
-            </span>
+              <button
+                type="button"
+                onClick={() => setConnectBreakpoints(!connectBreakpoints)}
+                aria-pressed={connectBreakpoints}
+                className={toggleClass(connectBreakpoints)}
+              >
+                {t.pingConnectBreakpoints}
+              </button>
+              <span className="text-sm text-zen-fg-muted">
+                {formatMsg(t.pingActiveProbes, {
+                  count: activeProbesList.length,
+                })}
+              </span>
+            </div>
           </div>
         </div>
 
         {canRenderChart ? (
           <>
+            <div className="flex items-baseline gap-2 text-xs text-zen-fg-muted">
+              <span>{chartTitle}</span>
+              <span className="tabular-nums">
+                MAX: {maxLatencyVal.toFixed(0)} ms
+              </span>
+            </div>
+            <div className="flex items-stretch gap-2">
+              <div className="flex w-14 shrink-0 flex-col justify-between py-1 text-right text-[10px] leading-none tabular-nums text-zen-fg-faint">
+                {latencyTicks.map((label) => (
+                  <span key={label}>{label}</span>
+                ))}
+              </div>
             <div
               ref={bindContainer}
               onMouseMove={isLoading ? undefined : onMouseMove}
@@ -599,13 +628,13 @@ export function LatencyProbePanel({
               onTouchStart={isLoading ? undefined : onTouchStart}
               onTouchMove={isLoading ? undefined : onTouchMove}
               onTouchEnd={isLoading ? undefined : onTouchEnd}
-              className={`relative overflow-visible touch-pan-y ${isLoading ? "pointer-events-none" : "cursor-crosshair"}`}
+              className={`relative min-w-0 flex-1 overflow-visible pb-5 touch-pan-y ${isLoading ? "pointer-events-none" : "cursor-crosshair"}`}
             >
               <svg
                 data-chart-main
                 viewBox={`0 0 ${width} ${height}`}
                 preserveAspectRatio="none"
-                className="w-full h-52 sm:h-56 md:h-60 overflow-visible"
+                className="h-48 w-full overflow-visible sm:h-56 md:h-64"
               >
                 {[0, 0.25, 0.5, 0.75, 1].map((r, i) => (
                   <line
@@ -615,7 +644,6 @@ export function LatencyProbePanel({
                     x2={width - paddingX}
                     y2={paddingY + r * chartHeight}
                     stroke={strokeColor}
-                    strokeDasharray="2 2"
                     strokeWidth={1}
                   />
                 ))}
@@ -708,33 +736,27 @@ export function LatencyProbePanel({
                 </div>
               )}
 
-              <div
-                className={`absolute top-0.5 left-1 ${zenType.micro} leading-none ${labelColor} pointer-events-none select-none`}
-              >
-                MAX: {maxLatencyVal.toFixed(0)} ms
-              </div>
-              <div
-                className={`absolute bottom-0.5 left-1 ${zenType.micro} leading-none ${labelColor} pointer-events-none select-none`}
-              >
-                MIN: 0 ms
-              </div>
-
-              <div className="absolute bottom-0 left-0 right-0 flex justify-between px-6 pointer-events-none">
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0">
                 {xAxisLabels.map(({ ratio, label }) => (
                   <span
                     key={ratio}
-                    className={`${zenType.micro} ${zenText.faint} font-mono tabular-nums`}
+                    className="absolute text-[10px] tabular-nums text-zen-fg-faint"
                     style={{
-                      position: "absolute",
                       left: `${((paddingX + ratio * chartWidth) / width) * 100}%`,
-                      transform: "translateX(-50%)",
-                      bottom: "-1.1rem",
+                      transform:
+                        ratio <= 0
+                          ? "translateX(0)"
+                          : ratio >= 1
+                            ? "translateX(-100%)"
+                            : "translateX(-50%)",
+                      bottom: 0,
                     }}
                   >
                     {label}
                   </span>
                 ))}
               </div>
+            </div>
             </div>
 
             <PingChartOverview
@@ -755,7 +777,7 @@ export function LatencyProbePanel({
                 {t.pingProbeFilter}
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-3 sm:gap-x-6 gap-y-2.5 pt-1.5 font-mono">
-                {tasks.map((task, idx) => {
+                {tasks.map((task) => {
                   const id = String(task.id);
                   const color = colors[id];
                   const isSelected = selectedProbes.includes(id);
